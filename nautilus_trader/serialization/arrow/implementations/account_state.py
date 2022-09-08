@@ -14,43 +14,101 @@
 # -------------------------------------------------------------------------------------------------
 
 import itertools
-from typing import Dict, List
+from typing import Dict, List, Optional, Tuple
 
-import orjson
+import msgspec
+import pandas as pd
 
+from nautilus_trader.model.currency import Currency
 from nautilus_trader.model.events.account import AccountState
+from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.serialization.arrow.serializer import register_parquet
 
 
 def serialize(state: AccountState):
-    result = []
+    result: Dict[Tuple[Currency, Optional[InstrumentId]], Dict] = {}
+
     base = state.to_dict(state)
     del base["balances"]
-    for balance in state.balances:
-        data = {
-            "balance_currency": balance.currency.code,
-            "balance_total": balance.total.as_double(),
-            "balance_locked": balance.locked.as_double(),
-            "balance_free": balance.free.as_double(),
+    del base["margins"]
+    base.update(
+        {
+            "balance_total": None,
+            "balance_locked": None,
+            "balance_free": None,
+            "balance_currency": None,
+            "margin_initial": None,
+            "margin_maintenance": None,
+            "margin_currency": None,
+            "margin_instrument_id": None,
         }
-        result.append({**base, **data})
+    )
 
-    return result
+    for balance in state.balances:
+        key = (balance.currency, None)
+        if key not in result:
+            result[key] = base.copy()
+        result[key].update(
+            {
+                "balance_total": balance.total.as_double(),
+                "balance_locked": balance.locked.as_double(),
+                "balance_free": balance.free.as_double(),
+                "balance_currency": balance.currency.code,
+            }
+        )
+
+    for margin in state.margins:
+        key = (margin.currency, margin.instrument_id)
+        if key not in result:
+            result[key] = base.copy()
+        result[key].update(
+            {
+                "margin_initial": margin.initial.as_double(),
+                "margin_maintenance": margin.maintenance.as_double(),
+                "margin_currency": margin.currency.code,
+                "margin_instrument_id": margin.instrument_id.value,
+            }
+        )
+
+    return list(result.values())
 
 
 def _deserialize(values):
     balances = []
     for v in values:
+        total = v.get("balance_total")
+        if total is None:
+            continue
         balances.append(
             dict(
-                currency=v["balance_currency"],
-                total=v["balance_total"],
+                total=total,
                 locked=v["balance_locked"],
                 free=v["balance_free"],
+                currency=v["balance_currency"],
             )
         )
-    state = {k: v for k, v in values[0].items() if not k.startswith("balance_")}
-    state["balances"] = orjson.dumps(balances)
+
+    margins = []
+    for v in values:
+        initial = v.get("margin_initial")
+        if pd.isnull(initial):
+            continue
+        margins.append(
+            dict(
+                initial=initial,
+                maintenance=v["margin_maintenance"],
+                currency=v["margin_currency"],
+                instrument_id=v["margin_instrument_id"],
+            )
+        )
+
+    state = {
+        k: v
+        for k, v in values[0].items()
+        if not k.startswith("balance_") and not k.startswith("margin_")
+    }
+    state["balances"] = msgspec.json.encode(balances)
+    state["margins"] = msgspec.json.encode(margins)
 
     return AccountState.from_dict(state)
 

@@ -24,18 +24,21 @@ from nautilus_trader.model.data.bar cimport Bar
 from nautilus_trader.model.data.bar cimport BarType
 from nautilus_trader.model.data.base cimport DataType
 from nautilus_trader.model.identifiers cimport InstrumentId
+from nautilus_trader.model.identifiers cimport Venue
 
 
 cdef class DataClient(Component):
     cdef readonly Cache _cache
     cdef set _subscriptions_generic
 
+    cdef readonly Venue venue
+    """The clients venue ID (if not a routing client).\n\n:returns: `Venue` or ``None``"""
     cdef readonly bint is_connected
     """If the client is connected.\n\n:returns: `bool`"""
 
     cpdef void _set_connected(self, bint value=*) except *
 
-# -- SUBSCRIPTIONS ---------------------------------------------------------------------------------
+# -- SUBSCRIPTIONS --------------------------------------------------------------------------------
 
     cpdef list subscribed_generic_data(self)
 
@@ -45,11 +48,11 @@ cdef class DataClient(Component):
     cpdef void _add_subscription(self, DataType data_type) except *
     cpdef void _remove_subscription(self, DataType data_type) except *
 
-# -- REQUEST HANDLERS ------------------------------------------------------------------------------
+# -- REQUEST HANDLERS -----------------------------------------------------------------------------
 
     cpdef void request(self, DataType data_type, UUID4 correlation_id) except *
 
-# -- DATA HANDLERS ---------------------------------------------------------------------------------
+# -- DATA HANDLERS --------------------------------------------------------------------------------
 
     cpdef void _handle_data(self, Data data) except *
     cpdef void _handle_data_response(self, DataType data_type, object data, UUID4 correlation_id) except *
@@ -68,7 +71,7 @@ cdef class MarketDataClient(DataClient):
 
     cdef object _update_instruments_task
 
-# -- SUBSCRIPTIONS ---------------------------------------------------------------------------------
+# -- SUBSCRIPTIONS --------------------------------------------------------------------------------
 
     cpdef list subscribed_instruments(self)
     cpdef list subscribed_order_book_deltas(self)
@@ -120,8 +123,9 @@ cdef class MarketDataClient(DataClient):
     cpdef void _remove_subscription_instrument_status_updates(self, InstrumentId instrument_id) except *
     cpdef void _remove_subscription_instrument_close_prices(self, InstrumentId instrument_id) except *
 
-# -- REQUEST HANDLERS ------------------------------------------------------------------------------
+# -- REQUEST HANDLERS -----------------------------------------------------------------------------
 
+    cpdef void request_instrument(self, InstrumentId instrument_id, UUID4 correlation_id) except *
     cpdef void request_quote_ticks(
         self,
         InstrumentId instrument_id,
@@ -147,7 +151,7 @@ cdef class MarketDataClient(DataClient):
         UUID4 correlation_id,
     ) except *
 
-# -- DATA HANDLERS ---------------------------------------------------------------------------------
+# -- DATA HANDLERS --------------------------------------------------------------------------------
 
     cpdef void _handle_quote_ticks(self, InstrumentId instrument_id, list ticks, UUID4 correlation_id) except *
     cpdef void _handle_trade_ticks(self, InstrumentId instrument_id, list ticks, UUID4 correlation_id) except *

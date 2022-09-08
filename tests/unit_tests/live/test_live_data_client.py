@@ -19,7 +19,6 @@ from nautilus_trader.backtest.data.providers import TestInstrumentProvider
 from nautilus_trader.common.clock import LiveClock
 from nautilus_trader.common.logging import Logger
 from nautilus_trader.common.providers import InstrumentProvider
-from nautilus_trader.common.uuid import UUIDFactory
 from nautilus_trader.live.data_client import LiveDataClient
 from nautilus_trader.live.data_client import LiveMarketDataClient
 from nautilus_trader.live.data_engine import LiveDataEngine
@@ -27,7 +26,8 @@ from nautilus_trader.model.identifiers import ClientId
 from nautilus_trader.model.identifiers import Venue
 from nautilus_trader.msgbus.bus import MessageBus
 from nautilus_trader.portfolio.portfolio import Portfolio
-from tests.test_kit.stubs import TestStubs
+from tests.test_kit.stubs.component import TestComponentStubs
+from tests.test_kit.stubs.identifiers import TestIdStubs
 
 
 BITMEX = Venue("BITMEX")
@@ -44,10 +44,9 @@ class TestLiveDataClientTests:
         self.loop.set_debug(True)
 
         self.clock = LiveClock()
-        self.uuid_factory = UUIDFactory()
         self.logger = Logger(self.clock)
 
-        self.trader_id = TestStubs.trader_id()
+        self.trader_id = TestIdStubs.trader_id()
 
         self.msgbus = MessageBus(
             trader_id=self.trader_id,
@@ -55,7 +54,7 @@ class TestLiveDataClientTests:
             logger=self.logger,
         )
 
-        self.cache = TestStubs.cache()
+        self.cache = TestComponentStubs.cache()
 
         self.engine = LiveDataEngine(
             loop=self.loop,
@@ -68,6 +67,7 @@ class TestLiveDataClientTests:
         self.client = LiveDataClient(
             loop=self.loop,
             client_id=ClientId("BLOOMBERG"),
+            venue=None,  # Multi-venue
             msgbus=self.msgbus,
             cache=self.cache,
             clock=self.clock,
@@ -86,10 +86,9 @@ class TestLiveMarketDataClientTests:
         self.loop.set_debug(True)
 
         self.clock = LiveClock()
-        self.uuid_factory = UUIDFactory()
         self.logger = Logger(self.clock)
 
-        self.trader_id = TestStubs.trader_id()
+        self.trader_id = TestIdStubs.trader_id()
 
         self.msgbus = MessageBus(
             trader_id=self.trader_id,
@@ -97,7 +96,7 @@ class TestLiveMarketDataClientTests:
             logger=self.logger,
         )
 
-        self.cache = TestStubs.cache()
+        self.cache = TestComponentStubs.cache()
 
         self.portfolio = Portfolio(
             msgbus=self.msgbus,
@@ -117,7 +116,11 @@ class TestLiveMarketDataClientTests:
         self.client = LiveMarketDataClient(
             loop=self.loop,
             client_id=ClientId(BINANCE.value),
-            instrument_provider=InstrumentProvider(),
+            venue=BINANCE,
+            instrument_provider=InstrumentProvider(
+                venue=Venue("SIM"),
+                logger=self.logger,
+            ),
             msgbus=self.msgbus,
             cache=self.cache,
             clock=self.clock,

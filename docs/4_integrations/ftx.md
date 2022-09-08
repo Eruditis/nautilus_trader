@@ -1,3 +1,0 @@
-# FTX
-
-In progress...

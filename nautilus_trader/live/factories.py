@@ -37,7 +37,7 @@ class LiveDataClientFactory:
         logger: LiveLogger,
     ):
         """
-        Return a new data client from the given parameters.
+        Return a new data client.
 
         Parameters
         ----------
@@ -64,9 +64,9 @@ class LiveDataClientFactory:
         raise NotImplementedError("method must be implemented in the subclass")  # pragma: no cover
 
 
-class LiveExecutionClientFactory:
+class LiveExecClientFactory:
     """
-    Provides a factory for creating `LiveDataClient` instances.
+    Provides a factory for creating `LiveExecutionClient` instances.
     """
 
     @staticmethod
@@ -80,7 +80,7 @@ class LiveExecutionClientFactory:
         logger: LiveLogger,
     ):
         """
-        Return a new execution client from the given parameters.
+        Return a new execution client.
 
         Parameters
         ----------

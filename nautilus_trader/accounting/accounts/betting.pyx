@@ -33,10 +33,7 @@ cdef class BettingAccount(CashAccount):
     """
     ACCOUNT_TYPE = AccountType.BETTING
 
-    cdef bint is_cash_account(self) except *:
-        return True
-
-# -- CALCULATIONS ----------------------------------------------------------------------------------
+# -- CALCULATIONS ---------------------------------------------------------------------------------
 
     cpdef Money calculate_balance_locked(
         self,
@@ -47,13 +44,13 @@ cdef class BettingAccount(CashAccount):
         bint inverse_as_quote=False,
     ):
         """
-        Calculate the locked balance from the given parameters.
+        Calculate the locked balance.
 
         Parameters
         ----------
         instrument : Instrument
             The instrument for the calculation.
-        side : OrderSide
+        side : OrderSide {``BUY``, ``SELL``}
             The order side.
         quantity : Quantity
             The order quantity.

@@ -13,6 +13,8 @@
 #  limitations under the License.
 # -------------------------------------------------------------------------------------------------
 
+import pickle
+
 import pytest
 
 from nautilus_trader.model.data.bar import Bar
@@ -26,11 +28,13 @@ from nautilus_trader.model.identifiers import Symbol
 from nautilus_trader.model.identifiers import Venue
 from nautilus_trader.model.objects import Price
 from nautilus_trader.model.objects import Quantity
-from tests.test_kit.stubs import TestStubs
+from tests.test_kit.stubs.data import TestDataStubs
+from tests.test_kit.stubs.identifiers import TestIdStubs
 
 
-AUDUSD_SIM = TestStubs.audusd_id()
-GBPUSD_SIM = TestStubs.gbpusd_id()
+AUDUSD_SIM = TestIdStubs.audusd_id()
+GBPUSD_SIM = TestIdStubs.gbpusd_id()
+
 ONE_MIN_BID = BarSpecification(1, BarAggregation.MINUTE, PriceType.BID)
 AUDUSD_1_MIN_BID = BarType(AUDUSD_SIM, ONE_MIN_BID)
 GBPUSD_1_MIN_BID = BarType(GBPUSD_SIM, ONE_MIN_BID)
@@ -60,6 +64,17 @@ class TestBarSpecification:
         assert bar_spec1 > bar_spec3
         assert bar_spec1 >= bar_spec3
 
+    def test_bar_spec_pickle(self):
+        # Arrange
+        bar_spec = BarSpecification(1000, BarAggregation.TICK, PriceType.LAST)
+
+        # Act
+        pickled = pickle.dumps(bar_spec)
+        unpickled = pickle.loads(pickled)  # noqa S301 (pickle is safe here)
+
+        # Assert
+        assert unpickled == bar_spec
+
     def test_bar_spec_hash_str_and_repr(self):
         # Arrange
         bar_spec = BarSpecification(1, BarAggregation.MINUTE, PriceType.BID)
@@ -81,7 +96,14 @@ class TestBarSpecification:
     @pytest.mark.parametrize(
         "value, expected",
         [
-            ["1-MINUTE-BID", BarSpecification(1, BarAggregation.MINUTE, PriceType.BID)],
+            [
+                "300-MILLISECOND-LAST",
+                BarSpecification(300, BarAggregation.MILLISECOND, PriceType.LAST),
+            ],
+            [
+                "1-MINUTE-BID",
+                BarSpecification(1, BarAggregation.MINUTE, PriceType.BID),
+            ],
             [
                 "15-MINUTE-MID",
                 BarSpecification(15, BarAggregation.MINUTE, PriceType.MID),
@@ -155,6 +177,15 @@ class TestBarSpecification:
             == is_information_aggregated
         )
 
+    def test_properties(self):
+        # Arrange, Act
+        bar_spec = BarSpecification(1, BarAggregation.HOUR, PriceType.BID)
+
+        # Assert
+        assert bar_spec.step == 1
+        assert bar_spec.aggregation == BarAggregation.HOUR
+        assert bar_spec.price_type == PriceType.BID
+
 
 class TestBarType:
     def test_bar_type_equality(self):
@@ -185,6 +216,19 @@ class TestBarType:
         assert bar_type1 < bar_type3
         assert bar_type3 > bar_type1
         assert bar_type3 >= bar_type1
+
+    def test_bar_type_pickle(self):
+        # Arrange
+        instrument_id = InstrumentId(Symbol("AUD/USD"), Venue("SIM"))
+        bar_spec = BarSpecification(1, BarAggregation.MINUTE, PriceType.BID)
+        bar_type = BarType(instrument_id, bar_spec)
+
+        # Act
+        pickled = pickle.dumps(bar_type)
+        unpickled = pickle.loads(pickled)  # noqa S301 (pickle is safe here)
+
+        # Assert
+        assert unpickled == bar_type
 
     def test_bar_type_hash_str_and_repr(self):
         # Arrange
@@ -233,9 +277,9 @@ class TestBarType:
                 ),
             ],
             [
-                "BTC/USDT.BINANCE-100-TICK-LAST-INTERNAL",
+                "BTCUSDT.BINANCE-100-TICK-LAST-INTERNAL",
                 BarType(
-                    InstrumentId(Symbol("BTC/USDT"), Venue("BINANCE")),
+                    InstrumentId(Symbol("BTCUSDT"), Venue("BINANCE")),
                     BarSpecification(100, BarAggregation.TICK, PriceType.LAST),
                     AggregationSource.INTERNAL,
                 ),
@@ -259,8 +303,23 @@ class TestBarType:
         # Assert
         assert expected == bar_type
 
+    def test_properties(self):
+        # Arrange, Act
+        instrument_id = InstrumentId(Symbol("AUD/USD"), Venue("SIM"))
+        bar_spec = BarSpecification(1, BarAggregation.MINUTE, PriceType.BID)
+        bar_type = BarType(instrument_id, bar_spec, AggregationSource.EXTERNAL)
+
+        # Assert
+        assert bar_type.instrument_id == instrument_id
+        assert bar_type.spec == bar_spec
+        assert bar_type.aggregation_source == AggregationSource.EXTERNAL
+
 
 class TestBar:
+    def test_fully_qualified_name(self):
+        # Arrange, Act, Assert
+        assert Bar.fully_qualified_name() == "nautilus_trader.model.data.bar:Bar"
+
     def test_check_when_high_below_low_raises_value_error(self):
         # Arrange, Act, Assert
         with pytest.raises(ValueError):
@@ -357,6 +416,34 @@ class TestBar:
             == "Bar(AUD/USD.SIM-1-MINUTE-BID-EXTERNAL,1.00001,1.00004,1.00002,1.00003,100000,0)"
         )
 
+    def test_is_single_price(self):
+        # Arrange
+        bar1 = Bar(
+            AUDUSD_1_MIN_BID,
+            Price.from_str("1.00000"),
+            Price.from_str("1.00000"),
+            Price.from_str("1.00000"),
+            Price.from_str("1.00000"),
+            Quantity.from_int(100000),
+            0,
+            0,
+        )
+
+        bar2 = Bar(
+            AUDUSD_1_MIN_BID,
+            Price.from_str("1.00000"),
+            Price.from_str("1.00004"),
+            Price.from_str("1.00002"),
+            Price.from_str("1.00003"),
+            Quantity.from_int(100000),
+            0,
+            0,
+        )
+
+        # Act, Assert
+        assert bar1.is_single_price()
+        assert not bar2.is_single_price()
+
     def test_to_dict(self):
         # Arrange
         bar = Bar(
@@ -388,10 +475,30 @@ class TestBar:
 
     def test_from_dict_returns_expected_bar(self):
         # Arrange
-        bar = TestStubs.bar_5decimal()
+        bar = TestDataStubs.bar_5decimal()
 
         # Act
         result = Bar.from_dict(Bar.to_dict(bar))
 
         # Assert
         assert result == bar
+
+    def test_pickle_bar(self):
+        # Arrange
+        bar = Bar(
+            AUDUSD_1_MIN_BID,
+            Price.from_str("1.00001"),
+            Price.from_str("1.00004"),
+            Price.from_str("1.00002"),
+            Price.from_str("1.00003"),
+            Quantity.from_int(100000),
+            0,
+            0,
+        )
+
+        # Act
+        pickled = pickle.dumps(bar)
+        unpickled = pickle.loads(pickled)  # noqa S301 (pickle is safe here)
+
+        # Assert
+        assert unpickled == bar

@@ -26,19 +26,20 @@ from nautilus_trader.model.tick_scheme.implementations.tiered import TieredTickS
 
 BETFAIR_VENUE = Venue("BETFAIR")
 BETFAIR_PRICE_PRECISION = 7
+BETFAIR_QUANTITY_PRECISION = 4
 
-"""
+
 # ------------------------------- MAPPINGS ------------------------------- #
 
-Mappings between Nautilus and betfair.
+# Mappings between Nautilus and betfair.
+#
+# Prefixes:
+#     N2B = {NAUTILUS: BETFAIR}
+#     B2N = {BETFAIR: NAUTILUS}
+#
+# In Nautilus, we map BUYS in probability space to a BACK
+# (Back @ 3.0 is equivalent to BID/BUY @ 0.33)
 
-Prefixes:
-    N2B = {NAUTILUS: BETFAIR}
-    B2N = {BETFAIR: NAUTILUS}
-
-In Nautilus, we map BUYS in probability space to a BACK
-(Back @ 3.0 is equivalent to BID/BUY @ 0.33)
-"""
 
 N2B_SIDE = {
     OrderSide.BUY: "BACK",
@@ -47,7 +48,6 @@ N2B_SIDE = {
 
 N2B_TIME_IN_FORCE = {
     TimeInForce.FOK: "FILL_OR_KILL",
-    TimeInForce.FAK: "FILL_OR_KILL",
 }
 
 B2N_MARKET_STREAM_SIDE = {
@@ -68,6 +68,13 @@ B_SIDE_KINDS = B_BID_KINDS + B_ASK_KINDS
 B2N_ORDER_STREAM_SIDE = {
     "B": OrderSide.BUY,
     "L": OrderSide.SELL,
+    "BACK": OrderSide.BUY,
+    "LAY": OrderSide.SELL,
+}
+
+B2N_TIME_IN_FORCE = {
+    "LAPSE": TimeInForce.DAY,
+    "PERSIST": TimeInForce.GTC,
 }
 
 
@@ -110,10 +117,10 @@ BETFAIR_TICK_SCHEME = TieredTickScheme(
 register_tick_scheme(BETFAIR_TICK_SCHEME)
 
 
-def price_to_probability(price: str) -> Price:
-    PyCondition.type(price, str, "price", "str")
-    PyCondition.positive(float(price), "price")
-    price = Price.from_str(price)
+def price_to_probability(price_str: str) -> Price:
+    PyCondition.type(price_str, str, "price", "str")
+    price = Price.from_str(f"{float(price_str):.2f}")
+    assert price > 0.0
     if price in BETFAIR_PRICE_TO_PROBABILITY_MAP:
         return BETFAIR_PRICE_TO_PROBABILITY_MAP[price]
     else:

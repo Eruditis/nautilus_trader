@@ -28,6 +28,7 @@ from nautilus_trader.model.enums import InstrumentStatus
 from tests.integration_tests.adapters.betfair.test_kit import BetfairResponses
 from tests.integration_tests.adapters.betfair.test_kit import BetfairStreaming
 from tests.integration_tests.adapters.betfair.test_kit import BetfairTestStubs
+from tests.test_kit.stubs.component import TestComponentStubs
 
 
 class TestBetfairInstrumentProvider:
@@ -39,8 +40,7 @@ class TestBetfairInstrumentProvider:
         self.client = BetfairTestStubs.betfair_client(loop=self.loop, logger=self.logger)
         self.provider = BetfairInstrumentProvider(
             client=self.client,
-            logger=BetfairTestStubs.live_logger(BetfairTestStubs.clock()),
-            market_filter=None,
+            logger=TestComponentStubs.logger(),
         )
 
     @pytest.mark.asyncio

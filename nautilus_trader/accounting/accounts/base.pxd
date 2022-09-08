@@ -13,8 +13,6 @@
 #  limitations under the License.
 # -------------------------------------------------------------------------------------------------
 
-from decimal import Decimal
-
 from nautilus_trader.model.c_enums.account_type cimport AccountType
 from nautilus_trader.model.c_enums.liquidity_side cimport LiquiditySide
 from nautilus_trader.model.currency cimport Currency
@@ -24,6 +22,7 @@ from nautilus_trader.model.identifiers cimport AccountId
 from nautilus_trader.model.instruments.base cimport Instrument
 from nautilus_trader.model.objects cimport AccountBalance
 from nautilus_trader.model.objects cimport Money
+from nautilus_trader.model.objects cimport Price
 from nautilus_trader.model.objects cimport Quantity
 from nautilus_trader.model.position cimport Position
 
@@ -40,13 +39,15 @@ cdef class Account:
     """The accounts type.\n\n:returns: `AccountType`"""
     cdef readonly Currency base_currency
     """The accounts base currency (``None`` for multi-currency accounts).\n\n:returns: `Currency` or ``None``"""
+    cdef readonly bint is_cash_account
+    """If the account is a type of ``CASH`` account."""
+    cdef readonly bint is_margin_account
+    """If the account is a type of ``MARGIN`` account."""
     cdef readonly bint calculate_account_state
     """If the accounts state should be calculated by Nautilus.\n\n:returns: `bool`"""
 
 # -- QUERIES ---------------------------------------------------------------------------------------
 
-    cdef bint is_cash_account(self) except *
-    cdef bint is_margin_account(self) except *
     cdef AccountState last_event_c(self)
     cdef list events_c(self)
     cdef int event_count_c(self)
@@ -78,7 +79,7 @@ cdef class Account:
         self,
         Instrument instrument,
         Quantity last_qty,
-        last_px: Decimal,
+        Price last_px,
         LiquiditySide liquidity_side,
         bint inverse_as_quote=*,
     )

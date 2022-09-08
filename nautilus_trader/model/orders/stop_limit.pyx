@@ -13,11 +13,11 @@
 #  limitations under the License.
 # -------------------------------------------------------------------------------------------------
 
-from cpython.datetime cimport datetime
-from libc.stdint cimport int64_t
+from libc.stdint cimport uint64_t
 
 from nautilus_trader.core.correctness cimport Condition
-from nautilus_trader.core.datetime cimport maybe_unix_nanos_to_dt
+from nautilus_trader.core.datetime cimport format_iso8601
+from nautilus_trader.core.datetime cimport unix_nanos_to_dt
 from nautilus_trader.core.uuid cimport UUID4
 from nautilus_trader.model.c_enums.contingency_type cimport ContingencyType
 from nautilus_trader.model.c_enums.contingency_type cimport ContingencyTypeParser
@@ -28,6 +28,8 @@ from nautilus_trader.model.c_enums.order_type cimport OrderType
 from nautilus_trader.model.c_enums.order_type cimport OrderTypeParser
 from nautilus_trader.model.c_enums.time_in_force cimport TimeInForce
 from nautilus_trader.model.c_enums.time_in_force cimport TimeInForceParser
+from nautilus_trader.model.c_enums.trigger_type cimport TriggerType
+from nautilus_trader.model.c_enums.trigger_type cimport TriggerTypeParser
 from nautilus_trader.model.events.order cimport OrderInitialized
 from nautilus_trader.model.events.order cimport OrderTriggered
 from nautilus_trader.model.events.order cimport OrderUpdated
@@ -38,24 +40,12 @@ from nautilus_trader.model.identifiers cimport StrategyId
 from nautilus_trader.model.identifiers cimport TraderId
 from nautilus_trader.model.objects cimport Price
 from nautilus_trader.model.objects cimport Quantity
-from nautilus_trader.model.orders.base cimport PassiveOrder
+from nautilus_trader.model.orders.base cimport Order
 
 
-cdef class StopLimitOrder(PassiveOrder):
+cdef class StopLimitOrder(Order):
     """
-    Represents a stop-limit order.
-
-    A stop-limit order is an instruction to submit a buy or sell limit order
-    when the user-specified stop trigger price is attained or penetrated. The
-    order has two basic components: the stop price and the limit price. When a
-    trade has occurred at or through the stop price, the order becomes
-    executable and enters the market as a limit order, which is an order to buy
-    or sell at a specified price or better.
-
-    A stop-limit eliminates the price risk associated with a stop order where
-    the execution price cannot be guaranteed, but exposes the trader to the
-    risk that the order may never fill even if the stop price is reached. The
-    trader could "miss the market" altogether.
+    Represents a `Stop-Limit` conditional order.
 
     Parameters
     ----------
@@ -72,33 +62,33 @@ cdef class StopLimitOrder(PassiveOrder):
     quantity : Quantity
         The order quantity (> 0).
     price : Price
-        The order limit price.
-    trigger : Price
-        The order stop trigger price.
-    time_in_force : TimeInForce
-        The order time-in-force.
-    expire_time : datetime, optional
-        The order expiry time.
+        The order price (LIMIT).
+    trigger_price : Price
+        The order trigger price (STOP).
+    trigger_type : TriggerType
+        The order trigger type.
     init_id : UUID4
         The order initialization event ID.
-    ts_init : int64
+    ts_init : uint64_t
         The UNIX timestamp (nanoseconds) when the object was initialized.
-    post_only : bool, optional
-        If the `LIMIT` order will only provide liquidity (once triggered).
-    reduce_only : bool, optional
-        If the `LIMIT` order carries the 'reduce-only' execution instruction.
+    time_in_force : TimeInForce {``GTC``, ``IOC``, ``FOK``, ``GTD``, ``DAY``}, default ``GTC``
+        The order time in force.
+    expire_time_ns : uint64_t, default 0 (no expiry)
+        The UNIX timestamp (nanoseconds) when the order will expire.
+    post_only : bool, default False
+        If the ``LIMIT`` order will only provide liquidity (once triggered).
+    reduce_only : bool, default False
+        If the ``LIMIT`` order carries the 'reduce-only' execution instruction.
     display_qty : Quantity, optional
-        The quantity of the `LIMIT` order to display on the public book (iceberg).
+        The quantity of the ``LIMIT`` order to display on the public book (iceberg).
     order_list_id : OrderListId, optional
         The order list ID associated with the order.
+    contingency_type : ContingencyType, default ``NONE``
+        The order contingency type.
+    linked_order_ids : list[ClientOrderId], optional
+        The order linked client order ID(s).
     parent_order_id : ClientOrderId, optional
         The order parent client order ID.
-    child_order_ids : list[ClientOrderId], optional
-        The order child client order ID(s).
-    contingency : ContingencyType
-        The order contingency type.
-    contingency_ids : list[ClientOrderId], optional
-        The order contingency client order ID(s).
     tags : str, optional
         The custom user tags for the order. These are optional and can
         contain any arbitrary delimiter if required.
@@ -108,7 +98,11 @@ cdef class StopLimitOrder(PassiveOrder):
     ValueError
         If `quantity` is not positive (> 0).
     ValueError
-        If `time_in_force` is ``GTD`` and the expire_time is ``None``.
+        If `trigger_type` is ``NONE``.
+    ValueError
+        If `time_in_force` is ``AT_THE_OPEN`` or ``AT_THE_CLOSE``.
+    ValueError
+        If `time_in_force` is ``GTD`` and `expire_time_ns` <= UNIX epoch.
     ValueError
         If `display_qty` is negative (< 0) or greater than `quantity`.
     """
@@ -122,23 +116,47 @@ cdef class StopLimitOrder(PassiveOrder):
         OrderSide order_side,
         Quantity quantity not None,
         Price price not None,
-        Price trigger not None,
-        TimeInForce time_in_force,
-        datetime expire_time,  # Can be None
+        Price trigger_price not None,
+        TriggerType trigger_type,
         UUID4 init_id not None,
-        int64_t ts_init,
+        uint64_t ts_init,
+        TimeInForce time_in_force=TimeInForce.GTC,
+        uint64_t expire_time_ns=0,
         bint post_only=False,
         bint reduce_only=False,
         Quantity display_qty=None,
         OrderListId order_list_id=None,
+        ContingencyType contingency_type=ContingencyType.NONE,
+        list linked_order_ids=None,
         ClientOrderId parent_order_id=None,
-        list child_order_ids=None,
-        ContingencyType contingency=ContingencyType.NONE,
-        list contingency_ids=None,
         str tags=None,
     ):
-        Condition.true(display_qty is None or 0 <= display_qty <= quantity, "display_qty was negative or greater than order quantity")  # noqa
-        super().__init__(
+        Condition.not_equal(trigger_type, TriggerType.NONE, "trigger_type", "NONE")
+        Condition.not_equal(time_in_force, TimeInForce.AT_THE_OPEN, "time_in_force", "AT_THE_OPEN`")
+        Condition.not_equal(time_in_force, TimeInForce.AT_THE_CLOSE, "time_in_force", "AT_THE_CLOSE`")
+
+        if time_in_force == TimeInForce.GTD:
+            # Must have an expire time
+            Condition.true(expire_time_ns > 0, "`expire_time_ns` cannot be <= UNIX epoch.")
+        else:
+            # Should not have an expire time
+            Condition.true(expire_time_ns == 0, "`expire_time_ns` was set when `time_in_force` not GTD.")
+        Condition.true(
+            display_qty is None or 0 <= display_qty <= quantity,
+            fail_msg="display_qty was negative or greater than order quantity",
+        )
+
+        # Set options
+        cdef dict options = {
+            "price": str(price),
+            "trigger_price": str(trigger_price),
+            "trigger_type": TriggerTypeParser.to_str(trigger_type),
+            "expire_time_ns": expire_time_ns,
+            "display_qty": str(display_qty) if display_qty is not None else None,
+        }
+
+        # Create initialization event
+        cdef OrderInitialized init = OrderInitialized(
             trader_id=trader_id,
             strategy_id=strategy_id,
             instrument_id=instrument_id,
@@ -146,39 +164,61 @@ cdef class StopLimitOrder(PassiveOrder):
             order_side=order_side,
             order_type=OrderType.STOP_LIMIT,
             quantity=quantity,
-            price=price,
             time_in_force=time_in_force,
-            expire_time=expire_time,
+            post_only=post_only,
             reduce_only=reduce_only,
-            options={
-                "trigger": str(trigger),
-                "post_only": post_only,
-                "display_qty": str(display_qty) if display_qty is not None else None,
-            },
+            options=options,
             order_list_id=order_list_id,
+            contingency_type=contingency_type,
+            linked_order_ids=linked_order_ids,
             parent_order_id=parent_order_id,
-            child_order_ids=child_order_ids,
-            contingency=contingency,
-            contingency_ids=contingency_ids,
             tags=tags,
-            init_id=init_id,
+            event_id=init_id,
             ts_init=ts_init,
         )
+        super().__init__(init=init)
 
-        self.trigger = trigger
-        self.is_triggered = False
-        self.is_post_only = post_only
+        self.price = price
+        self.trigger_price = trigger_price
+        self.trigger_type = trigger_type
+        self.expire_time_ns = expire_time_ns
         self.display_qty = display_qty
+        self.is_triggered = False
+        self.ts_triggered = 0
 
-    def __repr__(self) -> str:
-        cdef str id_string = f", id={self.venue_order_id.value})" if self.venue_order_id is not None else ")"
+    cdef bint has_price_c(self) except *:
+        return True
+
+    cdef bint has_trigger_price_c(self) except *:
+        return True
+
+    @property
+    def expire_time(self):
+        """
+        Return the expire time for the order (UTC).
+
+        Returns
+        -------
+        datetime or ``None``
+
+        """
+        return None if self.expire_time_ns == 0 else unix_nanos_to_dt(self.expire_time_ns)
+
+    cpdef str info(self):
+        """
+        Return a summary description of the order.
+
+        Returns
+        -------
+        str
+
+        """
+        cdef str expiration_str = "" if self.expire_time_ns == 0 else f" {format_iso8601(unix_nanos_to_dt(self.expire_time_ns))}"
         return (
-            f"{type(self).__name__}("
-            f"{self.info()}, "
-            f"trigger={self.trigger}, "
-            f"status={self._fsm.state_string_c()}, "
-            f"client_order_id={self.client_order_id.value}"
-            f"{id_string}"
+            f"{OrderSideParser.to_str(self.side)} {self.quantity.to_str()} {self.instrument_id} "
+            f"{OrderTypeParser.to_str(self.type)} @ {self.trigger_price}-STOP"
+            f"[{TriggerTypeParser.to_str(self.trigger_type)}] {self.price}-LIMIT "
+            f"{TimeInForceParser.to_str(self.time_in_force)}{expiration_str}"
         )
 
     cpdef dict to_dict(self):
@@ -190,35 +230,36 @@ cdef class StopLimitOrder(PassiveOrder):
         dict[str, object]
 
         """
+        cdef ClientOrderId o
         return {
-            "trader_id": self.trader_id.value,
-            "strategy_id": self.strategy_id.value,
-            "instrument_id": self.instrument_id.value,
-            "client_order_id": self.client_order_id.value,
-            "venue_order_id": self.venue_order_id.value if self.venue_order_id else None,
-            "position_id": self.position_id if self.position_id else None,
-            "account_id": self.account_id.value if self.account_id else None,
-            "execution_id": self.execution_id.value if self.execution_id else None,
+            "trader_id": self.trader_id.to_str(),
+            "strategy_id": self.strategy_id.to_str(),
+            "instrument_id": self.instrument_id.to_str(),
+            "client_order_id": self.client_order_id.to_str(),
+            "venue_order_id": self.venue_order_id.to_str() if self.venue_order_id else None,
+            "position_id": self.position_id.to_str() if self.position_id else None,
+            "account_id": self.account_id.to_str() if self.account_id else None,
+            "last_trade_id": self.last_trade_id.to_str() if self.last_trade_id else None,
             "type": OrderTypeParser.to_str(self.type),
             "side": OrderSideParser.to_str(self.side),
             "quantity": str(self.quantity),
-            "trigger": str(self.trigger),
             "price": str(self.price),
-            "liquidity_side": LiquiditySideParser.to_str(self.liquidity_side),
+            "trigger_price": str(self.trigger_price),
+            "trigger_type": TriggerTypeParser.to_str(self.trigger_type),
             "expire_time_ns": self.expire_time_ns,
             "time_in_force": TimeInForceParser.to_str(self.time_in_force),
             "filled_qty": str(self.filled_qty),
-            "avg_px": str(self.avg_px) if self.avg_px else None,
+            "liquidity_side": LiquiditySideParser.to_str(self.liquidity_side),
+            "avg_px": str(self.avg_px),
             "slippage": str(self.slippage),
             "status": self._fsm.state_string_c(),
             "is_post_only": self.is_post_only,
             "is_reduce_only": self.is_reduce_only,
             "display_qty": str(self.display_qty) if self.display_qty is not None else None,
-            "order_list_id": self.order_list_id,
-            "parent_order_id": self.parent_order_id,
-            "child_order_ids": ",".join([o.value for o in self.child_order_ids]) if self.child_order_ids is not None else None,  # noqa
-            "contingency": ContingencyTypeParser.to_str(self.contingency),
-            "contingency_ids": ",".join([o.value for o in self.contingency_ids]) if self.contingency_ids is not None else None,  # noqa
+            "order_list_id": self.order_list_id.to_str() if self.order_list_id is not None else None,
+            "contingency_type": ContingencyTypeParser.to_str(self.contingency_type),
+            "linked_order_ids": ",".join([o.to_str() for o in self.linked_order_ids]) if self.linked_order_ids is not None else None,  # noqa
+            "parent_order_id": self.parent_order_id.to_str() if self.parent_order_id is not None else None,
             "tags": self.tags,
             "ts_last": self.ts_last,
             "ts_init": self.ts_init,
@@ -227,7 +268,7 @@ cdef class StopLimitOrder(PassiveOrder):
     @staticmethod
     cdef StopLimitOrder create(OrderInitialized init):
         """
-        Return a stop-limit order from the given initialized event.
+        Return a `Stop-Limit` order from the given initialized event.
 
         Parameters
         ----------
@@ -247,11 +288,8 @@ cdef class StopLimitOrder(PassiveOrder):
         Condition.not_none(init, "init")
         Condition.equal(init.type, OrderType.STOP_LIMIT, "init.type", "OrderType")
 
-        # Parse display quantity
-        cdef str display_qty_str = init.options["display_qty"]
-        cdef Quantity display_qty = None
-        if display_qty_str is not None:
-            display_qty = Quantity.from_str_c(display_qty_str)
+        cdef str display_qty_str = init.options.get("display_qty")
+
         return StopLimitOrder(
             trader_id=init.trader_id,
             strategy_id=init.strategy_id,
@@ -260,29 +298,40 @@ cdef class StopLimitOrder(PassiveOrder):
             order_side=init.side,
             quantity=init.quantity,
             price=Price.from_str_c(init.options["price"]),
-            trigger=Price.from_str_c(init.options["trigger"]),
+            trigger_price=Price.from_str_c(init.options["trigger_price"]),
+            trigger_type=TriggerTypeParser.from_str(init.options["trigger_type"]),
             time_in_force=init.time_in_force,
-            expire_time=maybe_unix_nanos_to_dt(init.options.get("expire_time")),
+            expire_time_ns=init.options["expire_time_ns"],
             init_id=init.id,
             ts_init=init.ts_init,
-            post_only=init.options["post_only"],
+            post_only=init.post_only,
             reduce_only=init.reduce_only,
-            display_qty=display_qty,
+            display_qty=Quantity.from_str_c(display_qty_str) if display_qty_str is not None else None,
             order_list_id=init.order_list_id,
+            contingency_type=init.contingency_type,
+            linked_order_ids=init.linked_order_ids,
             parent_order_id=init.parent_order_id,
-            child_order_ids=init.child_order_ids,
-            contingency=init.contingency,
-            contingency_ids=init.contingency_ids,
             tags=init.tags,
         )
 
     cdef void _updated(self, OrderUpdated event) except *:
-        self.venue_order_id = event.venue_order_id
-        self.quantity = event.quantity
-        if self.is_triggered:
+        if self.venue_order_id != event.venue_order_id:
+            self._venue_order_ids.append(self.venue_order_id)
+            self.venue_order_id = event.venue_order_id
+        if event.quantity is not None:
+            self.quantity = event.quantity
+            self.leaves_qty.sub_assign(self.filled_qty)
+        if event.price is not None:
             self.price = event.price
-        else:
-            self.trigger = event.price
+        if event.trigger_price is not None:
+            self.trigger_price = event.trigger_price
 
     cdef void _triggered(self, OrderTriggered event) except *:
         self.is_triggered = True
+        self.ts_triggered = event.ts_event
+
+    cdef void _set_slippage(self) except *:
+        if self.side == OrderSide.BUY:
+            self.slippage = self.avg_px - self.price.as_f64_c()
+        elif self.side == OrderSide.SELL:
+            self.slippage = self.price.as_f64_c() - self.avg_px

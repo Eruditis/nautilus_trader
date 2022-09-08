@@ -13,16 +13,20 @@
 #  limitations under the License.
 # -------------------------------------------------------------------------------------------------
 
-from libc.stdint cimport int64_t
+from libc.stdint cimport uint64_t
 
-from nautilus_trader.common.uuid cimport UUIDFactory
 from nautilus_trader.core.message cimport Event
+from nautilus_trader.core.rust.common cimport TimeEvent_t
 from nautilus_trader.core.uuid cimport UUID4
 
 
 cdef class TimeEvent(Event):
-    cdef readonly str name
-    """The time events unique name.\n\n:returns: `str`"""
+    cdef TimeEvent_t _mem
+
+    cdef str to_str(self)
+
+    @staticmethod
+    cdef TimeEvent from_raw_c(TimeEvent_t raw)
 
 
 cdef class TimeEventHandler:
@@ -33,39 +37,29 @@ cdef class TimeEventHandler:
     cpdef void handle(self) except *
 
 
-cdef class Timer:
+cdef class LiveTimer:
+    cdef object _internal
+
     cdef readonly str name
     """The timers name using for hashing.\n\n:returns: `str`"""
     cdef readonly object callback
     """The timers callback function.\n\n:returns: `object`"""
-    cdef readonly int64_t interval_ns
-    """The timers set interval.\n\n:returns: `int64`"""
-    cdef readonly int64_t start_time_ns
-    """The timers set start time.\n\n:returns: `int64`"""
-    cdef readonly int64_t next_time_ns
-    """The timers next alert timestamp.\n\n:returns: `int64`"""
-    cdef readonly int64_t stop_time_ns
-    """The timers set stop time (if set).\n\n:returns: `int64`"""
+    cdef readonly uint64_t interval_ns
+    """The timers set interval.\n\n:returns: `uint64_t`"""
+    cdef readonly uint64_t start_time_ns
+    """The timers set start time.\n\n:returns: `uint64_t`"""
+    cdef readonly uint64_t next_time_ns
+    """The timers next alert timestamp.\n\n:returns: `uint64_t`"""
+    cdef readonly uint64_t stop_time_ns
+    """The timers set stop time (if set).\n\n:returns: `uint64_t`"""
     cdef readonly bint is_expired
     """If the timer is expired.\n\n:returns: `bool`"""
 
-    cpdef TimeEvent pop_event(self, UUID4 event_id, int64_t ts_init)
-    cpdef void iterate_next_time(self, int64_t to_time_ns) except *
+    cpdef TimeEvent pop_event(self, UUID4 event_id, uint64_t ts_init)
+    cpdef void iterate_next_time(self, uint64_t to_time_ns) except *
     cpdef void cancel(self) except *
-
-
-cdef class TestTimer(Timer):
-    cdef UUIDFactory _uuid_factory
-
-    cpdef Event pop_next_event(self)
-    cpdef list advance(self, int64_t to_time_ns)
-
-
-cdef class LiveTimer(Timer):
-    cdef object _internal
-
-    cpdef void repeat(self, int64_t now_ns) except *
-    cdef object _start_timer(self, int64_t now_ns)
+    cpdef void repeat(self, uint64_t now_ns) except *
+    cdef object _start_timer(self, uint64_t now_ns)
 
 
 cdef class ThreadTimer(LiveTimer):

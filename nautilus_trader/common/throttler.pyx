@@ -13,7 +13,7 @@
 #  limitations under the License.
 # -------------------------------------------------------------------------------------------------
 
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 from cpython.datetime cimport timedelta
 from libc.stdint cimport int64_t
@@ -25,8 +25,7 @@ from nautilus_trader.common.logging cimport Logger
 from nautilus_trader.common.queue cimport Queue
 from nautilus_trader.common.timer cimport TimeEvent
 from nautilus_trader.core.correctness cimport Condition
-from nautilus_trader.core.datetime cimport secs_to_nanos
-from nautilus_trader.core.math cimport max_int64
+from nautilus_trader.core.rust.core cimport secs_to_nanos
 
 
 cdef class Throttler:
@@ -84,7 +83,7 @@ cdef class Throttler:
         int limit,
         timedelta interval not None,
         output_send not None: Callable[[Any], None],
-        output_drop: Callable[[Any], None],  # Can be None
+        output_drop: Optional[Callable[[Any], None]],
         Clock clock not None,
         Logger logger not None,
     ):
@@ -116,7 +115,7 @@ cdef class Throttler:
     @property
     def qsize(self):
         """
-        The qsize of the internal buffer.
+        Return the qsize of the internal buffer.
 
         Returns
         -------
@@ -140,7 +139,7 @@ cdef class Throttler:
                 return 0
 
         cdef int64_t spread = self._clock.timestamp_ns() - self._timestamps[-1]
-        cdef int64_t diff = max_int64(0, self._interval_ns - spread)
+        cdef int64_t diff = max_uint64(0, self._interval_ns - spread)
         cdef double used = <double>diff / <double>self._interval_ns
 
         if not self._warm:
@@ -230,3 +229,10 @@ cdef class Throttler:
         self._timestamps.appendleft(self._clock.timestamp_ns())
         self._output_send(msg)
         self.sent_count += 1
+
+
+cdef inline uint64_t max_uint64(uint64_t a, uint64_t b):
+    if a > b:
+        return a
+    else:
+        return b

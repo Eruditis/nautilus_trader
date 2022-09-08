@@ -13,132 +13,277 @@
 #  limitations under the License.
 # -------------------------------------------------------------------------------------------------
 
-from nautilus_trader.execution.messages import ExecutionMassStatus
-from nautilus_trader.execution.messages import ExecutionReport
-from nautilus_trader.execution.messages import OrderStatusReport
-from nautilus_trader.execution.messages import PositionStatusReport
-from nautilus_trader.model.currencies import USD
-from nautilus_trader.model.enums import LiquiditySide
-from nautilus_trader.model.enums import OrderStatus
-from nautilus_trader.model.enums import PositionSide
-from nautilus_trader.model.identifiers import ClientId
+from nautilus_trader.backtest.data.providers import TestInstrumentProvider
+from nautilus_trader.common.clock import TestClock
+from nautilus_trader.common.factories import OrderFactory
+from nautilus_trader.core.uuid import UUID4
+from nautilus_trader.execution.messages import CancelAllOrders
+from nautilus_trader.execution.messages import CancelOrder
+from nautilus_trader.execution.messages import ModifyOrder
+from nautilus_trader.execution.messages import QueryOrder
+from nautilus_trader.execution.messages import SubmitOrder
+from nautilus_trader.execution.messages import SubmitOrderList
+from nautilus_trader.model.enums import OrderSide
 from nautilus_trader.model.identifiers import ClientOrderId
-from nautilus_trader.model.identifiers import ExecutionId
 from nautilus_trader.model.identifiers import PositionId
+from nautilus_trader.model.identifiers import StrategyId
+from nautilus_trader.model.identifiers import TraderId
 from nautilus_trader.model.identifiers import VenueOrderId
-from nautilus_trader.model.objects import Money
 from nautilus_trader.model.objects import Price
 from nautilus_trader.model.objects import Quantity
-from tests.test_kit.stubs import TestStubs
+from tests.test_kit.stubs.identifiers import TestIdStubs
 
 
-AUDUSD_SIM = TestStubs.audusd_id()
+AUDUSD_SIM = TestInstrumentProvider.default_fx_ccy("AUD/USD")
 
 
-class TestExecutionStateReport:
-    def test_instantiate_execution_report(self):
-        # Arrange, Act
-        report = ExecutionReport(
-            client_order_id=ClientOrderId("O-123456789"),
-            venue_order_id=VenueOrderId("1"),
-            venue_position_id=PositionId("1"),
-            execution_id=ExecutionId("1"),
-            last_qty=Quantity.from_int(100),
-            last_px=Price.from_str("100.50"),
-            commission=Money("4.50", USD),
-            liquidity_side=LiquiditySide.TAKER,
-            ts_event=0,
-            ts_init=0,
+class TestCommands:
+    def setup(self):
+        # Fixture Setup
+        self.clock = TestClock()
+
+        self.trader_id = TestIdStubs.trader_id()
+
+        self.order_factory = OrderFactory(
+            trader_id=self.trader_id,
+            strategy_id=StrategyId("S-001"),
+            clock=TestClock(),
         )
 
-        # Assert
-        assert (
-            str(report)
-            == "ExecutionReport(client_order_id=O-123456789, venue_order_id=1, venue_position_id=1, id=1, last_qty=100, last_px=100.50, commission=4.50 USD, liquidity_side=TAKER, ts_event=0, ts_init=0)"  # noqa
-        )  # noqa
-        assert (
-            repr(report)
-            == "ExecutionReport(client_order_id=O-123456789, venue_order_id=1, venue_position_id=1, id=1, last_qty=100, last_px=100.50, commission=4.50 USD, liquidity_side=TAKER, ts_event=0, ts_init=0)"  # noqa
-        )  # noqa
-
-    def test_instantiate_execution_mass_status_report(self):
+    def test_submit_order_command_to_from_dict_and_str_repr(self):
         # Arrange
-        client_id = ClientId("IB")
-        account_id = TestStubs.account_id()
+        uuid = UUID4()
 
-        # Act
-        report = ExecutionMassStatus(
-            client_id=client_id,
-            account_id=account_id,
-            ts_init=0,
+        order = self.order_factory.market(
+            AUDUSD_SIM.id,
+            OrderSide.BUY,
+            Quantity.from_int(100000),
         )
 
-        # Assert
-        assert report.client_id == client_id
-        assert report.account_id == account_id
-        assert report.ts_init == 0
-        assert report.order_reports() == {}
-        assert report.position_reports() == {}
+        command = SubmitOrder(
+            trader_id=TraderId("TRADER-001"),
+            strategy_id=StrategyId("S-001"),
+            position_id=PositionId("P-001"),
+            check_position_exists=True,
+            order=order,
+            command_id=uuid,
+            ts_init=self.clock.timestamp_ns(),
+        )
+
+        # Act, Assert
+        assert SubmitOrder.from_dict(SubmitOrder.to_dict(command)) == command
         assert (
-            repr(report)
-            == "ExecutionMassStatus(client_id=IB, account_id=SIM-000, order_reports={}, exec_reports={}, position_reports={}, ts_init=0)"  # noqa
-        )  # noqa
-
-    def test_add_order_status_report(self):
-        # Arrange
-        report = ExecutionMassStatus(
-            client_id=ClientId("IB"),
-            account_id=TestStubs.account_id(),
-            ts_init=0,
+            str(command)
+            == "SubmitOrder(instrument_id=AUD/USD.SIM, client_order_id=O-19700101-000000-000-001-1, position_id=P-001, check_position_exists=True, order=BUY 100_000 AUD/USD.SIM MARKET GTC)"  # noqa
+        )
+        assert (
+            repr(command)
+            == f"SubmitOrder(client_id=None, trader_id=TRADER-001, strategy_id=S-001, instrument_id=AUD/USD.SIM, client_order_id=O-19700101-000000-000-001-1, position_id=P-001, check_position_exists=True, order=BUY 100_000 AUD/USD.SIM MARKET GTC, command_id={uuid}, ts_init=0)"  # noqa
         )
 
-        venue_order_id = VenueOrderId("1")
-        order_report = OrderStatusReport(
+    def test_submit_bracket_order_command_to_from_dict_and_str_repr(self):
+        # Arrange
+        uuid = UUID4()
+
+        bracket = self.order_factory.bracket_market(
+            instrument_id=AUDUSD_SIM.id,
+            order_side=OrderSide.BUY,
+            quantity=Quantity.from_int(100000),
+            stop_loss=Price.from_str("1.00000"),
+            take_profit=Price.from_str("1.00100"),
+        )
+
+        command = SubmitOrderList(
+            trader_id=TraderId("TRADER-001"),
+            strategy_id=StrategyId("S-001"),
+            order_list=bracket,
+            command_id=uuid,
+            ts_init=self.clock.timestamp_ns(),
+        )
+
+        # Act, Assert
+        assert SubmitOrderList.from_dict(SubmitOrderList.to_dict(command)) == command
+        assert (
+            str(command)
+            == "SubmitOrderList(instrument_id=AUD/USD.SIM, order_list=OrderList(id=1, instrument_id=AUD/USD.SIM, orders=[MarketOrder(BUY 100_000 AUD/USD.SIM MARKET GTC, status=INITIALIZED, client_order_id=O-19700101-000000-000-001-1, venue_order_id=None, tags=ENTRY), StopMarketOrder(SELL 100_000 AUD/USD.SIM STOP_MARKET @ 1.00000[DEFAULT] GTC, status=INITIALIZED, client_order_id=O-19700101-000000-000-001-2, venue_order_id=None, tags=STOP_LOSS), LimitOrder(SELL 100_000 AUD/USD.SIM LIMIT @ 1.00100 GTC, status=INITIALIZED, client_order_id=O-19700101-000000-000-001-3, venue_order_id=None, tags=TAKE_PROFIT)]))"  # noqa
+        )
+        assert (
+            repr(command)
+            == f"SubmitOrderList(client_id=None, trader_id=TRADER-001, strategy_id=S-001, instrument_id=AUD/USD.SIM, order_list=OrderList(id=1, instrument_id=AUD/USD.SIM, orders=[MarketOrder(BUY 100_000 AUD/USD.SIM MARKET GTC, status=INITIALIZED, client_order_id=O-19700101-000000-000-001-1, venue_order_id=None, tags=ENTRY), StopMarketOrder(SELL 100_000 AUD/USD.SIM STOP_MARKET @ 1.00000[DEFAULT] GTC, status=INITIALIZED, client_order_id=O-19700101-000000-000-001-2, venue_order_id=None, tags=STOP_LOSS), LimitOrder(SELL 100_000 AUD/USD.SIM LIMIT @ 1.00100 GTC, status=INITIALIZED, client_order_id=O-19700101-000000-000-001-3, venue_order_id=None, tags=TAKE_PROFIT)]), command_id={uuid}, ts_init=0)"  # noqa
+        )
+
+    def test_modify_order_command_to_from_dict_and_str_repr(self):
+        # Arrange
+        uuid = UUID4()
+
+        command = ModifyOrder(
+            trader_id=TraderId("TRADER-001"),
+            strategy_id=StrategyId("S-001"),
+            instrument_id=AUDUSD_SIM.id,
             client_order_id=ClientOrderId("O-123456"),
-            venue_order_id=venue_order_id,
-            order_status=OrderStatus.REJECTED,
-            filled_qty=Quantity.zero(),
-            ts_init=0,
+            venue_order_id=VenueOrderId("001"),
+            price=Price.from_str("1.00000"),
+            trigger_price=Price.from_str("1.00010"),
+            quantity=Quantity.from_int(100000),
+            command_id=uuid,
+            ts_init=self.clock.timestamp_ns(),
         )
 
-        # Act
-        report.add_order_report(order_report)
-
-        # Assert
-        assert report.order_reports()[venue_order_id] == order_report
+        # Act, Assert
+        assert ModifyOrder.from_dict(ModifyOrder.to_dict(command)) == command
         assert (
-            repr(report)
-            == "ExecutionMassStatus(client_id=IB, account_id=SIM-000, order_reports={VenueOrderId('1'): OrderStatusReport(client_order_id=O-123456, venue_order_id=1, order_status=REJECTED, filled_qty=0, ts_init=0)}, exec_reports={}, position_reports={}, ts_init=0)"  # noqa
+            str(command)
+            == "ModifyOrder(instrument_id=AUD/USD.SIM, client_order_id=O-123456, venue_order_id=001, quantity=100_000, price=1.00000, trigger_price=1.00010)"  # noqa
         )
         assert (
-            repr(order_report)
-            == "OrderStatusReport(client_order_id=O-123456, venue_order_id=1, order_status=REJECTED, filled_qty=0, ts_init=0)"  # noqa
+            repr(command)
+            == f"ModifyOrder(client_id=None, trader_id=TRADER-001, strategy_id=S-001, instrument_id=AUD/USD.SIM, client_order_id=O-123456, venue_order_id=001, quantity=100_000, price=1.00000, trigger_price=1.00010, command_id={uuid}, ts_init=0)"  # noqa
         )
 
-    def test_add_position_state_report(self):
-        report = ExecutionMassStatus(
-            client_id=ClientId("IB"),
-            account_id=TestStubs.account_id(),
-            ts_init=0,
+    def test_modify_order_command_with_none_venue_order_id_to_from_dict_and_str_repr(self):
+        # Arrange
+        uuid = UUID4()
+
+        command = ModifyOrder(
+            trader_id=TraderId("TRADER-001"),
+            strategy_id=StrategyId("S-001"),
+            instrument_id=AUDUSD_SIM.id,
+            client_order_id=ClientOrderId("O-123456"),
+            venue_order_id=None,
+            price=Price.from_str("1.00000"),
+            trigger_price=Price.from_str("1.00010"),
+            quantity=Quantity.from_int(100000),
+            command_id=uuid,
+            ts_init=self.clock.timestamp_ns(),
         )
 
-        position_report = PositionStatusReport(
-            instrument_id=AUDUSD_SIM,
-            position_side=PositionSide.FLAT,
-            qty=Quantity.zero(),
-            ts_init=0,
-        )
-
-        # Act
-        report.add_position_report(position_report)
-
-        # Assert
-        assert report.position_reports()[AUDUSD_SIM] == position_report
+        # Act, Assert
+        assert ModifyOrder.from_dict(ModifyOrder.to_dict(command)) == command
         assert (
-            repr(report)
-            == "ExecutionMassStatus(client_id=IB, account_id=SIM-000, order_reports={}, exec_reports={}, position_reports={InstrumentId('AUD/USD.SIM'): PositionStatusReport(instrument_id=AUD/USD.SIM, side=FLAT, qty=0, ts_init=0)}, ts_init=0)"  # noqa
-        )  # noqa
+            str(command)
+            == "ModifyOrder(instrument_id=AUD/USD.SIM, client_order_id=O-123456, venue_order_id=None, quantity=100_000, price=1.00000, trigger_price=1.00010)"  # noqa
+        )
         assert (
-            repr(position_report)
-            == "PositionStatusReport(instrument_id=AUD/USD.SIM, side=FLAT, qty=0, ts_init=0)"  # noqa
-        )  # noqa
+            repr(command)
+            == f"ModifyOrder(client_id=None, trader_id=TRADER-001, strategy_id=S-001, instrument_id=AUD/USD.SIM, client_order_id=O-123456, venue_order_id=None, quantity=100_000, price=1.00000, trigger_price=1.00010, command_id={uuid}, ts_init=0)"  # noqa
+        )
+
+    def test_cancel_order_command_to_from_dict_and_str_repr(self):
+        # Arrange
+        uuid = UUID4()
+
+        command = CancelOrder(
+            trader_id=TraderId("TRADER-001"),
+            strategy_id=StrategyId("S-001"),
+            instrument_id=AUDUSD_SIM.id,
+            client_order_id=ClientOrderId("O-123456"),
+            venue_order_id=VenueOrderId("001"),
+            command_id=uuid,
+            ts_init=self.clock.timestamp_ns(),
+        )
+
+        # Act, Assert
+        assert CancelOrder.from_dict(CancelOrder.to_dict(command)) == command
+        assert (
+            str(command)
+            == "CancelOrder(instrument_id=AUD/USD.SIM, client_order_id=O-123456, venue_order_id=001)"  # noqa
+        )
+        assert (
+            repr(command)
+            == f"CancelOrder(client_id=SIM, trader_id=TRADER-001, strategy_id=S-001, instrument_id=AUD/USD.SIM, client_order_id=O-123456, venue_order_id=001, command_id={uuid}, ts_init=0)"  # noqa
+        )
+
+    def test_cancel_order_command_with_none_venue_order_id_to_from_dict_and_str_repr(self):
+        # Arrange
+        uuid = UUID4()
+
+        command = CancelOrder(
+            trader_id=TraderId("TRADER-001"),
+            strategy_id=StrategyId("S-001"),
+            instrument_id=AUDUSD_SIM.id,
+            client_order_id=ClientOrderId("O-123456"),
+            venue_order_id=None,
+            command_id=uuid,
+            ts_init=self.clock.timestamp_ns(),
+        )
+
+        # Act, Assert
+        assert CancelOrder.from_dict(CancelOrder.to_dict(command)) == command
+        assert (
+            str(command)
+            == "CancelOrder(instrument_id=AUD/USD.SIM, client_order_id=O-123456, venue_order_id=None)"  # noqa
+        )
+        assert (
+            repr(command)
+            == f"CancelOrder(client_id=SIM, trader_id=TRADER-001, strategy_id=S-001, instrument_id=AUD/USD.SIM, client_order_id=O-123456, venue_order_id=None, command_id={uuid}, ts_init=0)"  # noqa
+        )
+
+    def test_cancel_all_orders_command_to_from_dict_and_str_repr(self):
+        # Arrange
+        uuid = UUID4()
+
+        command = CancelAllOrders(
+            trader_id=TraderId("TRADER-001"),
+            strategy_id=StrategyId("S-001"),
+            instrument_id=AUDUSD_SIM.id,
+            command_id=uuid,
+            ts_init=self.clock.timestamp_ns(),
+        )
+
+        # Act, Assert
+        assert CancelAllOrders.from_dict(CancelAllOrders.to_dict(command)) == command
+        assert str(command) == "CancelAllOrders(instrument_id=AUD/USD.SIM)"  # noqa
+        assert (
+            repr(command)
+            == f"CancelAllOrders(client_id=None, trader_id=TRADER-001, strategy_id=S-001, instrument_id=AUD/USD.SIM, command_id={uuid}, ts_init=0)"  # noqa
+        )
+
+    def test_query_order_command_to_from_dict_and_str_repr(self):
+        # Arrange
+        uuid = UUID4()
+
+        command = QueryOrder(
+            trader_id=TraderId("TRADER-001"),
+            strategy_id=StrategyId("S-001"),
+            instrument_id=AUDUSD_SIM.id,
+            client_order_id=ClientOrderId("O-123456"),
+            venue_order_id=VenueOrderId("001"),
+            command_id=uuid,
+            ts_init=self.clock.timestamp_ns(),
+        )
+
+        # Act, Assert
+        assert QueryOrder.from_dict(QueryOrder.to_dict(command)) == command
+        assert (
+            str(command)
+            == "QueryOrder(instrument_id=AUD/USD.SIM, client_order_id=O-123456, venue_order_id=001)"  # noqa
+        )
+        assert (
+            repr(command)
+            == f"QueryOrder(client_id=SIM, trader_id=TRADER-001, strategy_id=S-001, instrument_id=AUD/USD.SIM, client_order_id=O-123456, venue_order_id=001, command_id={uuid}, ts_init=0)"  # noqa
+        )
+
+    def test_query_order_command_with_none_venue_order_id_to_from_dict_and_str_repr(self):
+        # Arrange
+        uuid = UUID4()
+
+        command = QueryOrder(
+            trader_id=TraderId("TRADER-001"),
+            strategy_id=StrategyId("S-001"),
+            instrument_id=AUDUSD_SIM.id,
+            client_order_id=ClientOrderId("O-123456"),
+            venue_order_id=None,
+            command_id=uuid,
+            ts_init=self.clock.timestamp_ns(),
+        )
+
+        # Act, Assert
+        assert QueryOrder.from_dict(QueryOrder.to_dict(command)) == command
+        assert (
+            str(command)
+            == "QueryOrder(instrument_id=AUD/USD.SIM, client_order_id=O-123456, venue_order_id=None)"  # noqa
+        )
+        assert (
+            repr(command)
+            == f"QueryOrder(client_id=SIM, trader_id=TRADER-001, strategy_id=S-001, instrument_id=AUD/USD.SIM, client_order_id=O-123456, venue_order_id=None, command_id={uuid}, ts_init=0)"  # noqa
+        )

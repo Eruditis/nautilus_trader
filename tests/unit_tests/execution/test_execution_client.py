@@ -17,19 +17,19 @@ from nautilus_trader.backtest.data.providers import TestInstrumentProvider
 from nautilus_trader.common.clock import TestClock
 from nautilus_trader.common.factories import OrderFactory
 from nautilus_trader.common.logging import Logger
-from nautilus_trader.common.uuid import UUIDFactory
 from nautilus_trader.execution.client import ExecutionClient
 from nautilus_trader.execution.engine import ExecutionEngine
 from nautilus_trader.model.currencies import USD
 from nautilus_trader.model.enums import AccountType
-from nautilus_trader.model.identifiers import AccountId
+from nautilus_trader.model.enums import OMSType
 from nautilus_trader.model.identifiers import ClientId
 from nautilus_trader.model.identifiers import StrategyId
 from nautilus_trader.model.identifiers import TraderId
 from nautilus_trader.model.identifiers import Venue
 from nautilus_trader.msgbus.bus import MessageBus
 from nautilus_trader.portfolio.portfolio import Portfolio
-from tests.test_kit.stubs import TestStubs
+from tests.test_kit.stubs.component import TestComponentStubs
+from tests.test_kit.stubs.identifiers import TestIdStubs
 
 
 USDJPY_SIM = TestInstrumentProvider.default_fx_ccy("USD/JPY")
@@ -40,11 +40,9 @@ class TestExecutionClient:
     def setup(self):
         # Fixture Setup
         self.clock = TestClock()
-        self.uuid_factory = UUIDFactory()
         self.logger = Logger(self.clock)
 
-        self.trader_id = TestStubs.trader_id()
-        self.account_id = TestStubs.account_id()
+        self.trader_id = TestIdStubs.trader_id()
 
         self.msgbus = MessageBus(
             trader_id=self.trader_id,
@@ -52,7 +50,7 @@ class TestExecutionClient:
             logger=self.logger,
         )
 
-        self.cache = TestStubs.cache()
+        self.cache = TestComponentStubs.cache()
 
         self.portfolio = Portfolio(
             msgbus=self.msgbus,
@@ -72,7 +70,8 @@ class TestExecutionClient:
 
         self.client = ExecutionClient(
             client_id=ClientId(self.venue.value),
-            account_id=TestStubs.account_id(),
+            venue=self.venue,
+            oms_type=OMSType.HEDGING,
             account_type=AccountType.MARGIN,
             base_currency=USD,
             msgbus=self.msgbus,
@@ -90,11 +89,12 @@ class TestExecutionClient:
     def test_venue_when_brokerage_returns_client_id_value_as_venue(self):
         assert self.client.venue == self.venue
 
-    def test_venue_when_brokerage_multi_venue_returns_none(self):
+    def test_venue_when_routing_venue_returns_none(self):
         # Arrange
         client = ExecutionClient(
             client_id=ClientId("IB"),
-            account_id=AccountId("IB", "U1258001"),
+            venue=None,  # Multi-venue
+            oms_type=OMSType.HEDGING,
             account_type=AccountType.MARGIN,
             base_currency=USD,
             msgbus=self.msgbus,

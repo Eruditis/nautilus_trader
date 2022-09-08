@@ -15,6 +15,7 @@
 
 from typing import Dict
 
+from nautilus_trader.config import StrategyConfig
 from nautilus_trader.core.data import Data
 from nautilus_trader.core.message import Event
 from nautilus_trader.model.data.bar import Bar
@@ -22,14 +23,15 @@ from nautilus_trader.model.data.tick import QuoteTick
 from nautilus_trader.model.data.tick import TradeTick
 from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.instruments.base import Instrument
-from nautilus_trader.trading.strategy import TradingStrategy
-from nautilus_trader.trading.strategy import TradingStrategyConfig
+from nautilus_trader.trading.strategy import Strategy
 
 
-class MyStrategyConfig(TradingStrategyConfig):
+class MyStrategyConfig(StrategyConfig):
     """
     Configuration for ``MyStrategy`` instances.
 
+    Parameters
+    ----------
     instrument_id : InstrumentId
         The instrument ID for the strategy.
     order_id_tag : str
@@ -43,7 +45,7 @@ class MyStrategyConfig(TradingStrategyConfig):
     instrument_id: str
 
 
-class MyStrategy(TradingStrategy):
+class MyStrategy(Strategy):
     """
     A blank template strategy.
 
@@ -83,7 +85,7 @@ class MyStrategy(TradingStrategy):
         Parameters
         ----------
         tick : QuoteTick
-            The quote tick received.
+            The tick received.
 
         """
         pass

@@ -28,7 +28,9 @@ from nautilus_trader.model.orderbook.level cimport Level
 
 cdef class Ladder:
     """
-    Represents a ladder of orders in a book.
+    Represents a ladder of price levels in a book.
+
+    A ladder is on one side of the book, either bid or ask/offer.
 
     Parameters
     ----------
@@ -59,7 +61,7 @@ cdef class Ladder:
         self._order_id_level_index = {}  # type: dict[str, Level]
 
         self.levels = []  # type: list[Level]  # TODO: Make levels private??
-        self.reverse = reverse
+        self.is_reversed = reverse
         self.price_precision = price_precision
         self.size_precision = size_precision
 
@@ -92,7 +94,7 @@ cdef class Ladder:
             level = Level(price=order.price)
             level.add(order)
 
-            if self.reverse:
+            if self.is_reversed:
                 self.levels.append(level)
                 # TODO: heapq._siftdown_max is temporary before custom data structure
                 heapq._siftdown_max(self.levels, 0, len(self.levels) - 1)
@@ -250,9 +252,9 @@ cdef class Ladder:
         cdef Level level
         cdef Order book_order
         for level in self.levels:
-            if self.reverse and level.price < order.price:
+            if self.is_reversed and level.price < order.price:
                 break
-            elif not self.reverse and level.price > order.price:
+            elif not self.is_reversed and level.price > order.price:
                 break
             for book_order in level.orders:
                 current = book_order.size if depth_type == DepthType.VOLUME else book_order.exposure()

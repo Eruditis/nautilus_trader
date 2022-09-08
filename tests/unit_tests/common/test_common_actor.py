@@ -13,6 +13,7 @@
 #  limitations under the License.
 # -------------------------------------------------------------------------------------------------
 
+import sys
 from datetime import timedelta
 
 import pytest
@@ -21,13 +22,13 @@ from nautilus_trader.backtest.data.providers import TestInstrumentProvider
 from nautilus_trader.backtest.data_client import BacktestMarketDataClient
 from nautilus_trader.common.actor import Actor
 from nautilus_trader.common.clock import TestClock
-from nautilus_trader.common.config import ActorConfig
 from nautilus_trader.common.enums import ComponentState
 from nautilus_trader.common.enums import LogLevel
 from nautilus_trader.common.logging import Logger
-from nautilus_trader.common.uuid import UUIDFactory
+from nautilus_trader.common.logging import LoggerAdapter
+from nautilus_trader.config import ActorConfig
+from nautilus_trader.config import ImportableActorConfig
 from nautilus_trader.core.data import Data
-from nautilus_trader.core.fsm import InvalidStateTrigger
 from nautilus_trader.data.engine import DataEngine
 from nautilus_trader.execution.engine import ExecutionEngine
 from nautilus_trader.model.currencies import EUR
@@ -42,12 +43,18 @@ from nautilus_trader.model.identifiers import InstrumentId
 from nautilus_trader.model.identifiers import Symbol
 from nautilus_trader.model.identifiers import Venue
 from nautilus_trader.msgbus.bus import MessageBus
+from nautilus_trader.persistence.catalog.parquet import ParquetDataCatalog
+from nautilus_trader.persistence.streaming import StreamingFeatherWriter
 from nautilus_trader.trading.filters import NewsEvent
 from nautilus_trader.trading.filters import NewsImpact
-from tests.test_kit.mocks import KaboomActor
-from tests.test_kit.mocks import MockActor
+from tests.test_kit.mocks.actors import KaboomActor
+from tests.test_kit.mocks.actors import MockActor
+from tests.test_kit.mocks.data import data_catalog_setup
 from tests.test_kit.stubs import UNIX_EPOCH
-from tests.test_kit.stubs import TestStubs
+from tests.test_kit.stubs.component import TestComponentStubs
+from tests.test_kit.stubs.data import TestDataStubs
+from tests.test_kit.stubs.events import TestEventStubs
+from tests.test_kit.stubs.identifiers import TestIdStubs
 
 
 AUDUSD_SIM = TestInstrumentProvider.default_fx_ccy("AUD/USD")
@@ -59,14 +66,13 @@ class TestActor:
     def setup(self):
         # Fixture Setup
         self.clock = TestClock()
-        self.uuid_factory = UUIDFactory()
         self.logger = Logger(
             clock=self.clock,
             level_stdout=LogLevel.DEBUG,
         )
 
-        self.trader_id = TestStubs.trader_id()
-        self.account_id = TestStubs.account_id()
+        self.trader_id = TestIdStubs.trader_id()
+        self.account_id = TestIdStubs.account_id()
         self.component_id = "MyComponent-001"
 
         self.msgbus = MessageBus(
@@ -75,7 +81,7 @@ class TestActor:
             logger=self.logger,
         )
 
-        self.cache = TestStubs.cache()
+        self.cache = TestComponentStubs.cache()
 
         self.data_engine = DataEngine(
             msgbus=self.msgbus,
@@ -111,6 +117,20 @@ class TestActor:
 
         self.data_engine.start()
         self.exec_engine.start()
+
+    def test_actor_fully_qualified_name(self):
+        # Arrange
+        config = ActorConfig(component_id="ALPHA-01")
+        actor = Actor(config=config)
+
+        # Act
+        result = actor.to_importable_config()
+
+        # Assert
+        assert isinstance(result, ImportableActorConfig)
+        assert result.actor_path == "nautilus_trader.common.actor:Actor"
+        assert result.config_path == "nautilus_trader.config.common:ActorConfig"
+        assert result.config == {"component_id": "ALPHA-01"}
 
     def test_id(self):
         # Arrange, Act
@@ -182,7 +202,7 @@ class TestActor:
         # Arrange
         actor = Actor(config=ActorConfig(component_id=self.component_id))
 
-        event = TestStubs.event_cash_account_state()
+        event = TestEventStubs.cash_account_state()
 
         # Act
         actor.handle_event(event)
@@ -275,7 +295,7 @@ class TestActor:
         actor = Actor(config=ActorConfig(component_id=self.component_id))
 
         # Act
-        actor.on_order_book(TestStubs.order_book())
+        actor.on_order_book(TestDataStubs.order_book())
 
         # Assert
         assert True  # Exception not raised
@@ -285,7 +305,7 @@ class TestActor:
         actor = Actor(config=ActorConfig(component_id=self.component_id))
 
         # Act
-        actor.on_order_book_delta(TestStubs.order_book_snapshot())
+        actor.on_order_book_delta(TestDataStubs.order_book_snapshot())
 
         # Assert
         assert True  # Exception not raised
@@ -295,7 +315,7 @@ class TestActor:
         actor = Actor(config=ActorConfig(component_id=self.component_id))
 
         # Act
-        actor.on_ticker(TestStubs.ticker())
+        actor.on_ticker(TestDataStubs.ticker())
 
         # Assert
         assert True  # Exception not raised
@@ -305,7 +325,7 @@ class TestActor:
         actor = Actor(config=ActorConfig(component_id=self.component_id))
 
         # Act
-        actor.on_venue_status_update(TestStubs.venue_status_update())
+        actor.on_venue_status_update(TestDataStubs.venue_status_update())
 
         # Assert
         assert True  # Exception not raised
@@ -315,7 +335,7 @@ class TestActor:
         actor = Actor(config=ActorConfig(component_id=self.component_id))
 
         # Act
-        actor.on_instrument_status_update(TestStubs.instrument_status_update())
+        actor.on_instrument_status_update(TestDataStubs.instrument_status_update())
 
         # Assert
         assert True  # Exception not raised
@@ -325,7 +345,7 @@ class TestActor:
         actor = Actor(config=ActorConfig(component_id=self.component_id))
 
         # Act
-        actor.on_event(TestStubs.event_cash_account_state())
+        actor.on_event(TestEventStubs.cash_account_state())
 
         # Assert
         assert True  # Exception not raised
@@ -334,7 +354,7 @@ class TestActor:
         # Arrange
         actor = Actor(config=ActorConfig(component_id=self.component_id))
 
-        tick = TestStubs.quote_tick_5decimal()
+        tick = TestDataStubs.quote_tick_5decimal()
 
         # Act
         actor.on_quote_tick(tick)
@@ -346,7 +366,7 @@ class TestActor:
         # Arrange
         actor = Actor(config=ActorConfig(component_id=self.component_id))
 
-        tick = TestStubs.trade_tick_5decimal()
+        tick = TestDataStubs.trade_tick_5decimal()
 
         # Act
         actor.on_trade_tick(tick)
@@ -358,10 +378,22 @@ class TestActor:
         # Arrange
         actor = Actor(config=ActorConfig(component_id=self.component_id))
 
-        bar = TestStubs.bar_5decimal()
+        bar = TestDataStubs.bar_5decimal()
 
         # Act
         actor.on_bar(bar)
+
+        # Assert
+        assert True  # Exception not raised
+
+    def test_on_historical_data_when_not_overridden_does_nothing(self):
+        # Arrange
+        actor = Actor(config=ActorConfig(component_id=self.component_id))
+
+        bar = TestDataStubs.bar_5decimal()
+
+        # Act
+        actor.on_historical_data(bar)
 
         # Assert
         assert True  # Exception not raised
@@ -383,68 +415,75 @@ class TestActor:
         # Assert
         assert True  # Exception not raised
 
-    def test_start_when_not_initialized_raises_invalid_state_trigger(self):
+    def test_start_when_invalid_state_does_not_start(self):
         # Arrange
         actor = Actor(config=ActorConfig(component_id=self.component_id))
 
-        # Act, Assert
-        with pytest.raises(InvalidStateTrigger):
-            actor.start()
+        # Act
+        actor.start()
 
-    def test_stop_when_not_initialized_raises_invalid_state_trigger(self):
+        # Assert
+        assert actor.state == ComponentState.PRE_INITIALIZED
+
+    def test_stop_when_invalid_state_does_not_stop(self):
         # Arrange
         actor = Actor(config=ActorConfig(component_id=self.component_id))
 
-        try:
-            actor.start()
-        except InvalidStateTrigger:
-            # Normally a bad practice but allows strategy to be put into
-            # the needed state to run the test.
-            pass
+        # Act
+        actor.stop()
 
-        # Act, Assert
-        with pytest.raises(InvalidStateTrigger):
-            actor.stop()
+        # Assert
+        assert actor.state == ComponentState.PRE_INITIALIZED
 
-    def test_resume_when_not_initialized_raises_invalid_state_trigger(self):
+    def test_resume_when_invalid_state_does_not_resume(self):
         # Arrange
         actor = Actor(config=ActorConfig(component_id=self.component_id))
 
-        # Act, Assert
-        with pytest.raises(InvalidStateTrigger):
-            actor.resume()
+        # Act
+        actor.resume()
 
-    def test_reset_when_not_initialized_raises_invalid_state_trigger(self):
+        # Assert
+        assert actor.state == ComponentState.PRE_INITIALIZED
+
+    def test_reset_when_invalid_state_does_not_reset(self):
         # Arrange
         actor = Actor(config=ActorConfig(component_id=self.component_id))
 
-        # Act, Assert
-        with pytest.raises(InvalidStateTrigger):
-            actor.reset()
+        # Act
+        actor.reset()
 
-    def test_dispose_when_not_initialized_raises_invalid_state_trigger(self):
+        # Assert
+        assert actor.state == ComponentState.PRE_INITIALIZED
+
+    def test_dispose_when_invalid_state_does_not_dispose(self):
         # Arrange
         actor = Actor(config=ActorConfig(component_id=self.component_id))
 
-        # Act, Assert
-        with pytest.raises(InvalidStateTrigger):
-            actor.dispose()
+        # Act
+        actor.dispose()
 
-    def test_degrade_when_not_initialized_raises_invalid_state_trigger(self):
+        # Assert
+        assert actor.state == ComponentState.PRE_INITIALIZED
+
+    def test_degrade_when_invalid_state_does_not_degrade(self):
         # Arrange
         actor = Actor(config=ActorConfig(component_id=self.component_id))
 
-        # Act, Assert
-        with pytest.raises(InvalidStateTrigger):
-            actor.degrade()
+        # Act
+        actor.degrade()
 
-    def test_fault_when_not_initialized_raises_invalid_state_trigger(self):
+        # Assert
+        assert actor.state == ComponentState.PRE_INITIALIZED
+
+    def test_fault_when_invalid_state_does_not_fault(self):
         # Arrange
         actor = Actor(config=ActorConfig(component_id=self.component_id))
 
-        # Act, Assert
-        with pytest.raises(InvalidStateTrigger):
-            actor.fault()
+        # Act
+        actor.fault()
+
+        # Assert
+        assert actor.state == ComponentState.PRE_INITIALIZED
 
     def test_start_when_user_code_raises_error_logs_and_reraises(self):
         # Arrange
@@ -460,8 +499,7 @@ class TestActor:
         # Act, Assert
         with pytest.raises(RuntimeError):
             actor.start()
-        assert actor.state == ComponentState.RUNNING
-        assert actor.is_running
+        assert actor.state == ComponentState.STARTING
 
     def test_stop_when_user_code_raises_error_logs_and_reraises(self):
         # Arrange
@@ -480,8 +518,7 @@ class TestActor:
         # Act, Assert
         with pytest.raises(RuntimeError):
             actor.stop()
-        assert actor.state == ComponentState.STOPPED
-        assert actor.is_stopped
+        assert actor.state == ComponentState.STOPPING
 
     def test_resume_when_user_code_raises_error_logs_and_reraises(self):
         # Arrange
@@ -502,8 +539,7 @@ class TestActor:
         # Act, Assert
         with pytest.raises(RuntimeError):
             actor.resume()
-        assert actor.state == ComponentState.RUNNING
-        assert actor.is_running
+        assert actor.state == ComponentState.RESUMING
 
     def test_reset_when_user_code_raises_error_logs_and_reraises(self):
         # Arrange
@@ -519,8 +555,7 @@ class TestActor:
         # Act, Assert
         with pytest.raises(RuntimeError):
             actor.reset()
-        assert actor.state == ComponentState.INITIALIZED
-        assert actor.is_initialized
+        assert actor.state == ComponentState.RESETTING
 
     def test_dispose_when_user_code_raises_error_logs_and_reraises(self):
         # Arrange
@@ -536,8 +571,7 @@ class TestActor:
         # Act, Assert
         with pytest.raises(RuntimeError):
             actor.dispose()
-        assert actor.state == ComponentState.DISPOSED
-        assert actor.is_disposed
+        assert actor.state == ComponentState.DISPOSING
 
     def test_degrade_when_user_code_raises_error_logs_and_reraises(self):
         # Arrange
@@ -556,8 +590,7 @@ class TestActor:
         # Act, Assert
         with pytest.raises(RuntimeError):
             actor.degrade()
-        assert actor.state == ComponentState.DEGRADED
-        assert actor.is_degraded
+        assert actor.state == ComponentState.DEGRADING
 
     def test_fault_when_user_code_raises_error_logs_and_reraises(self):
         # Arrange
@@ -576,8 +609,7 @@ class TestActor:
         # Act, Assert
         with pytest.raises(RuntimeError):
             actor.fault()
-        assert actor.state == ComponentState.FAULTED
-        assert actor.is_faulted
+        assert actor.state == ComponentState.FAULTING
 
     def test_handle_quote_tick_when_user_code_raises_exception_logs_and_reraises(self):
         # Arrange
@@ -593,7 +625,7 @@ class TestActor:
         actor.set_explode_on_start(False)
         actor.start()
 
-        tick = TestStubs.quote_tick_5decimal(AUDUSD_SIM.id)
+        tick = TestDataStubs.quote_tick_5decimal(AUDUSD_SIM.id)
 
         # Act, Assert
         with pytest.raises(RuntimeError):
@@ -613,7 +645,7 @@ class TestActor:
         actor.set_explode_on_start(False)
         actor.start()
 
-        tick = TestStubs.trade_tick_5decimal(AUDUSD_SIM.id)
+        tick = TestDataStubs.trade_tick_5decimal(AUDUSD_SIM.id)
 
         # Act, Assert
         with pytest.raises(RuntimeError):
@@ -633,7 +665,7 @@ class TestActor:
         actor.set_explode_on_start(False)
         actor.start()
 
-        bar = TestStubs.bar_5decimal()
+        bar = TestDataStubs.bar_5decimal()
 
         # Act, Assert
         with pytest.raises(RuntimeError):
@@ -679,7 +711,7 @@ class TestActor:
         actor.set_explode_on_start(False)
         actor.start()
 
-        event = TestStubs.event_cash_account_state(account_id=AccountId("TEST", "000"))
+        event = TestEventStubs.cash_account_state(account_id=AccountId("TEST-000"))
 
         # Act, Assert
         with pytest.raises(RuntimeError):
@@ -888,7 +920,7 @@ class TestActor:
             logger=self.logger,
         )
 
-        tick = TestStubs.quote_tick_5decimal(AUDUSD_SIM.id)
+        tick = TestDataStubs.quote_tick_5decimal(AUDUSD_SIM.id)
 
         # Act
         actor.handle_quote_tick(tick)
@@ -910,7 +942,7 @@ class TestActor:
 
         actor.start()
 
-        ticker = TestStubs.ticker()
+        ticker = TestDataStubs.ticker()
 
         # Act
         actor.handle_ticker(ticker)
@@ -930,7 +962,7 @@ class TestActor:
             logger=self.logger,
         )
 
-        ticker = TestStubs.ticker()
+        ticker = TestDataStubs.ticker()
 
         # Act
         actor.handle_ticker(ticker)
@@ -952,7 +984,7 @@ class TestActor:
 
         actor.start()
 
-        tick = TestStubs.quote_tick_5decimal(AUDUSD_SIM.id)
+        tick = TestDataStubs.quote_tick_5decimal(AUDUSD_SIM.id)
 
         # Act
         actor.handle_quote_tick(tick)
@@ -972,7 +1004,7 @@ class TestActor:
             logger=self.logger,
         )
 
-        tick = TestStubs.trade_tick_5decimal(AUDUSD_SIM.id)
+        tick = TestDataStubs.trade_tick_5decimal(AUDUSD_SIM.id)
 
         # Act
         actor.handle_trade_tick(tick)
@@ -994,7 +1026,7 @@ class TestActor:
 
         actor.start()
 
-        tick = TestStubs.trade_tick_5decimal(AUDUSD_SIM.id)
+        tick = TestDataStubs.trade_tick_5decimal(AUDUSD_SIM.id)
 
         # Act
         actor.handle_trade_tick(tick)
@@ -1014,7 +1046,7 @@ class TestActor:
             logger=self.logger,
         )
 
-        bar = TestStubs.bar_5decimal()
+        bar = TestDataStubs.bar_5decimal()
 
         # Act
         actor.handle_bar(bar)
@@ -1036,7 +1068,7 @@ class TestActor:
 
         actor.start()
 
-        bar = TestStubs.bar_5decimal()
+        bar = TestDataStubs.bar_5decimal()
 
         # Act
         actor.handle_bar(bar)
@@ -1110,14 +1142,17 @@ class TestActor:
             logger=self.logger,
         )
 
-        data_type = DataType(str, {"type": "NEWS_WIRE", "topic": "Earthquake"})
+        data_type = DataType(NewsEvent, {"type": "NEWS_WIRE", "topic": "Earthquake"})
 
         # Act
         actor.subscribe_data(data_type)
 
         # Assert
         assert self.data_engine.command_count == 0
-        assert actor.msgbus.subscriptions()[0].topic == "data.str.type=NEWS_WIRE.topic=Earthquake"
+        assert (
+            actor.msgbus.subscriptions()[0].topic
+            == "data.NewsEvent.type=NEWS_WIRE.topic=Earthquake"
+        )
 
     def test_subscribe_custom_data_with_client_id(self):
         # Arrange
@@ -1130,14 +1165,17 @@ class TestActor:
             logger=self.logger,
         )
 
-        data_type = DataType(str, {"type": "NEWS_WIRE", "topic": "Earthquake"})
+        data_type = DataType(NewsEvent, {"type": "NEWS_WIRE", "topic": "Earthquake"})
 
         # Act
         actor.subscribe_data(data_type, ClientId("QUANDL"))
 
         # Assert
         assert self.data_engine.command_count == 1
-        assert actor.msgbus.subscriptions()[0].topic == "data.str.type=NEWS_WIRE.topic=Earthquake"
+        assert (
+            actor.msgbus.subscriptions()[0].topic
+            == "data.NewsEvent.type=NEWS_WIRE.topic=Earthquake"
+        )
 
     def test_unsubscribe_custom_data(self):
         # Arrange
@@ -1150,7 +1188,7 @@ class TestActor:
             logger=self.logger,
         )
 
-        data_type = DataType(str, {"type": "NEWS_WIRE", "topic": "Earthquake"})
+        data_type = DataType(NewsEvent, {"type": "NEWS_WIRE", "topic": "Earthquake"})
         actor.subscribe_data(data_type)
 
         # Act
@@ -1171,7 +1209,7 @@ class TestActor:
             logger=self.logger,
         )
 
-        data_type = DataType(str, {"type": "NEWS_WIRE", "topic": "Earthquake"})
+        data_type = DataType(NewsEvent, {"type": "NEWS_WIRE", "topic": "Earthquake"})
         actor.subscribe_data(data_type, ClientId("QUANDL"))
 
         # Act
@@ -1476,6 +1514,79 @@ class TestActor:
         # Assert
         assert data in handler
 
+    def test_publish_signal_warns_invalid_type(self):
+        # Arrange
+        actor = MockActor()
+        actor.register_base(
+            trader_id=self.trader_id,
+            msgbus=self.msgbus,
+            cache=self.cache,
+            clock=self.clock,
+            logger=self.logger,
+        )
+
+        # Act, Assert
+        with pytest.raises(KeyError):
+            actor.publish_signal(name="test", value=dict(a=1), ts_event=0)
+
+    def test_publish_signal_sends_to_subscriber(self):
+        # Arrange
+        actor = MockActor()
+        actor.register_base(
+            trader_id=self.trader_id,
+            msgbus=self.msgbus,
+            cache=self.cache,
+            clock=self.clock,
+            logger=self.logger,
+        )
+
+        handler = []
+        self.msgbus.subscribe(
+            topic="data*",
+            handler=handler.append,
+        )
+
+        # Act
+        value = 5.0
+        actor.publish_signal(name="test", value=value, ts_event=0)
+
+        # Assert
+        msg = handler[0]
+        assert isinstance(msg, Data)
+        assert msg.ts_event == 0
+        assert msg.ts_init == 0
+        assert msg.value == value
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="test path broken on Windows")
+    def test_publish_data_persist(self):
+        # Arrange
+        actor = MockActor()
+        actor.register_base(
+            trader_id=self.trader_id,
+            msgbus=self.msgbus,
+            cache=self.cache,
+            clock=self.clock,
+            logger=self.logger,
+        )
+        data_catalog_setup()
+        catalog = ParquetDataCatalog.from_env()
+        writer = StreamingFeatherWriter(
+            path=str(catalog.path),
+            fs_protocol=catalog.fs_protocol,
+            logger=LoggerAdapter(
+                component_name="Actor",
+                logger=self.logger,
+            ),
+            replace=True,
+        )
+        self.msgbus.subscribe("data*", writer.write)
+
+        # Act
+        actor.publish_signal(name="Test", value=5.0, ts_event=0, stream=True)
+
+        # Assert
+        assert catalog.fs.exists(str(catalog.path / "SignalTest.feather"))
+
     def test_subscribe_bars(self):
         # Arrange
         actor = MockActor()
@@ -1487,7 +1598,7 @@ class TestActor:
             logger=self.logger,
         )
 
-        bar_type = TestStubs.bartype_audusd_1min_bid()
+        bar_type = TestDataStubs.bartype_audusd_1min_bid()
 
         # Act
         actor.subscribe_bars(bar_type)
@@ -1507,7 +1618,7 @@ class TestActor:
             logger=self.logger,
         )
 
-        bar_type = TestStubs.bartype_audusd_1min_bid()
+        bar_type = TestDataStubs.bartype_audusd_1min_bid()
 
         actor.subscribe_bars(bar_type)
 
@@ -1545,7 +1656,7 @@ class TestActor:
             logger=self.logger,
         )
 
-        data_type = DataType(str, {"type": "NEWS_WIRE", "topic": "Earthquakes"})
+        data_type = DataType(NewsEvent, {"type": "NEWS_WIRE", "topic": "Earthquakes"})
 
         # Act
         actor.request_data(ClientId("BLOOMBERG-01"), data_type)
@@ -1598,7 +1709,7 @@ class TestActor:
             logger=self.logger,
         )
 
-        bar_type = TestStubs.bartype_audusd_1min_bid()
+        bar_type = TestDataStubs.bartype_audusd_1min_bid()
 
         # Act
         actor.request_bars(bar_type)
@@ -1624,7 +1735,7 @@ class TestActor:
             logger=self.logger,
         )
 
-        bar_type = TestStubs.bartype_audusd_1min_bid()
+        bar_type = TestDataStubs.bartype_audusd_1min_bid()
 
         # Act, Assert
         with pytest.raises(ValueError):

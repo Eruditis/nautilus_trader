@@ -13,7 +13,7 @@
 #  limitations under the License.
 # -------------------------------------------------------------------------------------------------
 
-from libc.stdint cimport int64_t
+from libc.stdint cimport uint64_t
 
 from nautilus_trader.accounting.accounts.base cimport Account
 from nautilus_trader.backtest.execution_client cimport BacktestExecClient
@@ -23,21 +23,22 @@ from nautilus_trader.cache.cache cimport Cache
 from nautilus_trader.common.clock cimport Clock
 from nautilus_trader.common.logging cimport LoggerAdapter
 from nautilus_trader.common.queue cimport Queue
-from nautilus_trader.common.uuid cimport UUIDFactory
+from nautilus_trader.execution.messages cimport TradingCommand
 from nautilus_trader.model.c_enums.account_type cimport AccountType
 from nautilus_trader.model.c_enums.book_type cimport BookType
 from nautilus_trader.model.c_enums.liquidity_side cimport LiquiditySide
 from nautilus_trader.model.c_enums.oms_type cimport OMSType
 from nautilus_trader.model.c_enums.order_side cimport OrderSide
-from nautilus_trader.model.commands.trading cimport TradingCommand
+from nautilus_trader.model.c_enums.trailing_offset_type cimport TrailingOffsetType
 from nautilus_trader.model.currency cimport Currency
 from nautilus_trader.model.data.bar cimport Bar
-from nautilus_trader.model.data.tick cimport Tick
+from nautilus_trader.model.data.tick cimport QuoteTick
+from nautilus_trader.model.data.tick cimport TradeTick
 from nautilus_trader.model.identifiers cimport ClientOrderId
-from nautilus_trader.model.identifiers cimport ExecutionId
 from nautilus_trader.model.identifiers cimport InstrumentId
 from nautilus_trader.model.identifiers cimport PositionId
 from nautilus_trader.model.identifiers cimport StrategyId
+from nautilus_trader.model.identifiers cimport TradeId
 from nautilus_trader.model.identifiers cimport Venue
 from nautilus_trader.model.identifiers cimport VenueOrderId
 from nautilus_trader.model.instruments.base cimport Instrument
@@ -47,17 +48,15 @@ from nautilus_trader.model.objects cimport Quantity
 from nautilus_trader.model.orderbook.book cimport OrderBook
 from nautilus_trader.model.orderbook.data cimport OrderBookData
 from nautilus_trader.model.orders.base cimport Order
-from nautilus_trader.model.orders.base cimport PassiveOrder
 from nautilus_trader.model.orders.limit cimport LimitOrder
 from nautilus_trader.model.orders.market cimport MarketOrder
-from nautilus_trader.model.orders.stop_limit cimport StopLimitOrder
-from nautilus_trader.model.orders.stop_market cimport StopMarketOrder
+from nautilus_trader.model.orders.trailing_stop_limit cimport TrailingStopLimitOrder
+from nautilus_trader.model.orders.trailing_stop_market cimport TrailingStopMarketOrder
 from nautilus_trader.model.position cimport Position
 
 
 cdef class SimulatedExchange:
     cdef Clock _clock
-    cdef UUIDFactory _uuid_factory
     cdef LoggerAdapter _log
 
     cdef readonly Venue id
@@ -89,8 +88,6 @@ cdef class SimulatedExchange:
     """The fill model for the exchange.\n\n:returns: `FillModel`"""
     cdef readonly bint reject_stop_orders
     """If stop orders are rejected on submission if in the market.\n\n:returns: `bool`"""
-    cdef readonly bint bar_execution
-    """If the exchange execution dynamics is based on bar data.\n\n:returns: `bool`"""
     cdef readonly list modules
     """The simulation modules registered with the exchange.\n\n:returns: `list[SimulationModule]`"""
     cdef readonly dict instruments
@@ -99,12 +96,16 @@ cdef class SimulatedExchange:
     cdef dict _instrument_indexer
 
     cdef dict _books
+    cdef dict _last
     cdef dict _last_bids
     cdef dict _last_asks
+    cdef dict _last_bid_bars
+    cdef dict _last_ask_bars
     cdef dict _order_index
     cdef dict _orders_bid
     cdef dict _orders_ask
     cdef dict _oto_orders
+    cdef bint _bar_execution
 
     cdef dict _symbol_pos_count
     cdef dict _symbol_ord_count
@@ -113,65 +114,78 @@ cdef class SimulatedExchange:
     cdef list _inflight_queue
     cdef dict _inflight_counter
 
-    cpdef Price best_bid_price(self, InstrumentId instrument_id)
-    cpdef Price best_ask_price(self, InstrumentId instrument_id)
-    cpdef OrderBook get_book(self, InstrumentId instrument_id)
-    cpdef dict get_books(self)
-    cpdef list get_working_orders(self, InstrumentId instrument_id=*)
-    cpdef list get_working_bid_orders(self, InstrumentId instrument_id=*)
-    cpdef list get_working_ask_orders(self, InstrumentId instrument_id=*)
-    cpdef Account get_account(self)
+# -- REGISTRATION ---------------------------------------------------------------------------------
 
     cpdef void register_client(self, BacktestExecClient client) except *
     cpdef void set_fill_model(self, FillModel fill_model) except *
     cpdef void set_latency_model(self, LatencyModel latency_model) except *
     cpdef void initialize_account(self) except *
+    cpdef void add_instrument(self, Instrument instrument) except *
+
+# -- QUERIES --------------------------------------------------------------------------------------
+
+    cpdef Price best_bid_price(self, InstrumentId instrument_id)
+    cpdef Price best_ask_price(self, InstrumentId instrument_id)
+    cpdef OrderBook get_book(self, InstrumentId instrument_id)
+    cpdef dict get_books(self)
+    cpdef list get_open_orders(self, InstrumentId instrument_id=*)
+    cpdef list get_open_bid_orders(self, InstrumentId instrument_id=*)
+    cpdef list get_open_ask_orders(self, InstrumentId instrument_id=*)
+    cpdef Account get_account(self)
+
+# -- COMMANDS -------------------------------------------------------------------------------------
+
     cpdef void adjust_account(self, Money adjustment) except *
     cdef tuple generate_inflight_command(self, TradingCommand command)
     cpdef void send(self, TradingCommand command) except *
     cpdef void process_order_book(self, OrderBookData data) except *
-    cpdef void process_tick(self, Tick tick) except *
+    cpdef void process_quote_tick(self, QuoteTick tick) except *
+    cpdef void process_trade_tick(self, TradeTick tick) except *
     cpdef void process_bar(self, Bar bar) except *
-    cpdef void process(self, int64_t now_ns) except *
+    cdef void _process_trade_ticks_from_bar(self, OrderBook book, Bar bar) except *
+    cdef void _process_quote_ticks_from_bar(self, OrderBook book) except *
+    cpdef void process(self, uint64_t now_ns) except *
     cpdef void reset(self) except *
 
-# -- COMMAND HANDLING ------------------------------------------------------------------------------
+# -- COMMAND HANDLING -----------------------------------------------------------------------------
 
     cdef void _process_order(self, Order order) except *
     cdef void _process_market_order(self, MarketOrder order) except *
     cdef void _process_limit_order(self, LimitOrder order) except *
-    cdef void _process_stop_market_order(self, StopMarketOrder order) except *
-    cdef void _process_stop_limit_order(self, StopLimitOrder order) except *
+    cdef void _process_stop_market_order(self, Order order) except *
+    cdef void _process_stop_limit_order(self, Order order) except *
+    cdef void _process_trailing_stop_market_order(self, TrailingStopMarketOrder order) except *
+    cdef void _process_trailing_stop_limit_order(self, TrailingStopLimitOrder order) except *
     cdef void _update_limit_order(self, LimitOrder order, Quantity qty, Price price) except *
-    cdef void _update_stop_market_order(self, StopMarketOrder order, Quantity qty, Price price) except *
-    cdef void _update_stop_limit_order(self, StopLimitOrder order, Quantity qty, Price price, Price trigger) except *
+    cdef void _update_stop_market_order(self, Order order, Quantity qty, Price trigger_price) except *
+    cdef void _update_stop_limit_order(self, Order order, Quantity qty, Price price, Price trigger_price) except *
 
-# -- EVENT HANDLING --------------------------------------------------------------------------------
+# -- EVENT HANDLING -------------------------------------------------------------------------------
 
-    cdef void _accept_order(self, PassiveOrder order) except *
-    cdef void _update_order(self, PassiveOrder order, Quantity qty, Price price, Price trigger=*, bint update_ocos=*) except *
-    cdef void _update_oco_orders(self, PassiveOrder order) except *
-    cdef void _cancel_order(self, PassiveOrder order, bint cancel_ocos=*) except *
-    cdef void _cancel_oco_orders(self, PassiveOrder order) except *
-    cdef void _expire_order(self, PassiveOrder order) except *
+    cdef void _accept_order(self, Order order) except *
+    cdef void _update_order(self, Order order, Quantity qty, Price price=*, Price trigger_price=*, bint update_ocos=*) except *
+    cdef void _update_oco_orders(self, Order order) except *
+    cdef void _cancel_order(self, Order order, bint cancel_ocos=*) except *
+    cdef void _cancel_oco_orders(self, Order order) except *
+    cdef void _expire_order(self, Order order) except *
 
-# -- ORDER MATCHING ENGINE -------------------------------------------------------------------------
+# -- ORDER MATCHING ENGINE ------------------------------------------------------------------------
 
-    cdef void _add_order(self, PassiveOrder order) except *
+    cdef void _add_order(self, Order order) except *
     cdef void _delete_order(self, Order order) except *
-    cdef void _iterate_matching_engine(self, InstrumentId instrument_id, int64_t timestamp_ns) except *
-    cdef void _iterate_side(self, list orders, int64_t timestamp_ns) except *
-    cdef void _match_order(self, PassiveOrder order) except *
+    cdef void _iterate_matching_engine(self, InstrumentId instrument_id, uint64_t timestamp_ns) except *
+    cdef void _iterate_side(self, list orders, uint64_t timestamp_ns) except *
+    cdef void _match_order(self, Order order) except *
     cdef void _match_limit_order(self, LimitOrder order) except *
-    cdef void _match_stop_market_order(self, StopMarketOrder order) except *
-    cdef void _match_stop_limit_order(self, StopLimitOrder order) except *
+    cdef void _match_stop_market_order(self, Order order) except *
+    cdef void _match_stop_limit_order(self, Order order) except *
     cdef bint _is_limit_marketable(self, InstrumentId instrument_id, OrderSide side, Price price) except *
     cdef bint _is_limit_matched(self, InstrumentId instrument_id, OrderSide side, Price price) except *
     cdef bint _is_stop_marketable(self, InstrumentId instrument_id, OrderSide side, Price price) except *
     cdef bint _is_stop_triggered(self, InstrumentId instrument_id, OrderSide side, Price price) except *
-    cdef list _determine_limit_price_and_volume(self, PassiveOrder order)
+    cdef list _determine_limit_price_and_volume(self, Order order)
     cdef list _determine_market_price_and_volume(self, Order order)
-    cdef void _fill_limit_order(self, PassiveOrder order, LiquiditySide liquidity_side) except *
+    cdef void _fill_limit_order(self, Order order, LiquiditySide liquidity_side) except *
     cdef void _fill_market_order(self, Order order, LiquiditySide liquidity_side) except *
     cdef void _apply_fills(
         self,
@@ -191,18 +205,33 @@ cdef class SimulatedExchange:
         Price last_px,
         LiquiditySide liquidity_side,
     ) except *
+    cdef void _manage_trailing_stop(self, Order order) except *
+    cdef Price _calculate_new_trailing_price_last(
+        self,
+        Order order,
+        TrailingOffsetType trailing_offset_type,
+        double offset,
+        Price last,
+    )
+    cdef Price _calculate_new_trailing_price_bid_ask(
+        self,
+        Order order,
+        TrailingOffsetType trailing_offset_type,
+        double offset,
+        Price bid,
+        Price ask,
+    )
 
-# -- IDENTIFIER GENERATORS -------------------------------------------------------------------------
+# -- IDENTIFIER GENERATORS ------------------------------------------------------------------------
 
     cdef PositionId _get_position_id(self, Order order, bint generate=*)
     cdef PositionId _generate_venue_position_id(self, InstrumentId instrument_id)
     cdef VenueOrderId _generate_venue_order_id(self, InstrumentId instrument_id)
-    cdef ExecutionId _generate_execution_id(self)
+    cdef TradeId _generate_trade_id(self)
 
-# -- EVENT GENERATORS ------------------------------------------------------------------------------
+# -- EVENT GENERATORS -----------------------------------------------------------------------------
 
     cdef void _generate_fresh_account_state(self) except *
-    cdef void _generate_order_submitted(self, Order order) except *
     cdef void _generate_order_rejected(self, Order order, str reason) except *
     cdef void _generate_order_accepted(self, Order order) except *
     cdef void _generate_order_pending_update(self, Order order) except *
@@ -223,10 +252,10 @@ cdef class SimulatedExchange:
         VenueOrderId venue_order_id,
         str reason,
     ) except *
-    cdef void _generate_order_updated(self, Order order, Quantity qty, Price price, Price trigger) except *
+    cdef void _generate_order_updated(self, Order order, Quantity qty, Price price, Price trigger_price) except *
     cdef void _generate_order_canceled(self, Order order) except *
-    cdef void _generate_order_triggered(self, StopLimitOrder order) except *
-    cdef void _generate_order_expired(self, PassiveOrder order) except *
+    cdef void _generate_order_triggered(self, Order order) except *
+    cdef void _generate_order_expired(self, Order order) except *
     cdef void _generate_order_filled(
         self,
         Order order,

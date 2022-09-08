@@ -15,6 +15,8 @@
 
 from decimal import Decimal
 
+import pytest
+
 from nautilus_trader.accounting.factory import AccountFactory
 from nautilus_trader.adapters.betfair.common import BETFAIR_VENUE
 from nautilus_trader.backtest.data.providers import TestInstrumentProvider
@@ -45,7 +47,11 @@ from nautilus_trader.model.objects import Quantity
 from nautilus_trader.model.position import Position
 from nautilus_trader.msgbus.bus import MessageBus
 from nautilus_trader.portfolio.portfolio import Portfolio
-from tests.test_kit.stubs import TestStubs
+from tests.integration_tests.adapters.betfair.test_kit import BetfairTestStubs
+from tests.test_kit.stubs.component import TestComponentStubs
+from tests.test_kit.stubs.data import TestDataStubs
+from tests.test_kit.stubs.events import TestEventStubs
+from tests.test_kit.stubs.identifiers import TestIdStubs
 
 
 SIM = Venue("SIM")
@@ -59,7 +65,7 @@ USDJPY_SIM = TestInstrumentProvider.default_fx_ccy("USD/JPY")
 BTCUSDT_BINANCE = TestInstrumentProvider.btcusdt_binance()
 BTCUSD_BITMEX = TestInstrumentProvider.xbtusd_bitmex()
 ETHUSD_BITMEX = TestInstrumentProvider.ethusd_bitmex()
-BETTING_INSTRUMENT = TestInstrumentProvider.betting_instrument()
+BETTING_INSTRUMENT = BetfairTestStubs.betting_instrument()
 
 
 class TestPortfolio:
@@ -68,7 +74,7 @@ class TestPortfolio:
         self.clock = TestClock()
         self.logger = Logger(self.clock)
 
-        self.trader_id = TestStubs.trader_id()
+        self.trader_id = TestIdStubs.trader_id()
 
         self.order_factory = OrderFactory(
             trader_id=self.trader_id,
@@ -82,7 +88,7 @@ class TestPortfolio:
             logger=self.logger,
         )
 
-        self.cache = TestStubs.cache()
+        self.cache = TestComponentStubs.cache()
 
         self.portfolio = Portfolio(
             msgbus=self.msgbus,
@@ -113,18 +119,18 @@ class TestPortfolio:
     def test_account_when_account_returns_the_account_facade(self):
         # Arrange
         state = AccountState(
-            account_id=AccountId("BINANCE", "1513111"),
+            account_id=AccountId("BINANCE-1513111"),
             account_type=AccountType.CASH,
             base_currency=None,
             reported=True,
             balances=[
                 AccountBalance(
-                    BTC,
                     Money(10.00000000, BTC),
                     Money(0.00000000, BTC),
                     Money(10.00000000, BTC),
-                )
+                ),
             ],
+            margins=[],
             info={},
             event_id=UUID4(),
             ts_event=0,
@@ -137,7 +143,7 @@ class TestPortfolio:
         result = self.portfolio.account(BINANCE)
 
         # Assert
-        assert result.id.issuer == "BINANCE"
+        assert result.id.get_issuer() == "BINANCE"
 
     def test_balances_locked_when_no_account_for_venue_returns_none(self):
         # Arrange, Act, Assert
@@ -189,38 +195,32 @@ class TestPortfolio:
 
     def test_update_tick(self):
         # Arrange
-        tick = TestStubs.quote_tick_5decimal(GBPUSD_SIM.id)
+        tick = TestDataStubs.quote_tick_5decimal(GBPUSD_SIM.id)
 
         # Act
-        self.portfolio.update_tick(tick)
+        self.portfolio.update_quote_tick(tick)
 
         # Assert
         assert self.portfolio.unrealized_pnl(GBPUSD_SIM.id) is None
 
-    def test_update_orders_working_cash_account(self):
+    def test_exceed_free_balance_single_currency_raises_account_balance_negative_exception(self):
         # Arrange
-        AccountFactory.register_calculated_account("BINANCE")
+        AccountFactory.register_calculated_account("SIM")
 
-        account_id = AccountId("BINANCE", "000")
+        account_id = AccountId("SIM-000")
         state = AccountState(
             account_id=account_id,
             account_type=AccountType.CASH,
-            base_currency=None,  # Multi-currency account
+            base_currency=USD,  # Single-currency account
             reported=True,
             balances=[
                 AccountBalance(
-                    BTC,
-                    Money(10.00000000, BTC),
-                    Money(0.00000000, BTC),
-                    Money(10.00000000, BTC),
-                ),
-                AccountBalance(
-                    USDT,
-                    Money(100000.00000000, USDT),
-                    Money(0.00000000, USDT),
-                    Money(100000.00000000, USDT),
+                    Money(100000.00, USD),
+                    Money(0.00, USD),
+                    Money(100000.00, USD),
                 ),
             ],
+            margins=[],
             info={},
             event_id=UUID4(),
             ts_event=0,
@@ -229,7 +229,116 @@ class TestPortfolio:
 
         self.portfolio.update_account(state)
 
-        # Create two working orders
+        # Create order
+        order = self.order_factory.market(  # <-- order value 150_000 USDT
+            AUDUSD_SIM.id,
+            OrderSide.BUY,
+            Quantity.from_str("1000000.0"),
+        )
+
+        self.cache.add_order(order, position_id=None)
+
+        self.exec_engine.process(TestEventStubs.order_submitted(order, account_id=account_id))
+
+        # Act, Assert: push account to negative balance (wouldn't normally be allowed by risk engine)
+        with pytest.raises(ValueError):
+            fill = TestEventStubs.order_filled(
+                order,
+                instrument=AUDUSD_SIM,
+                account_id=account_id,
+            )
+            self.exec_engine.process(fill)
+
+    def test_exceed_free_balance_multi_currency_raises_account_balance_negative_exception(self):
+        # Arrange
+        AccountFactory.register_calculated_account("BINANCE")
+
+        account_id = AccountId("BINANCE-000")
+        state = AccountState(
+            account_id=account_id,
+            account_type=AccountType.CASH,
+            base_currency=None,  # Multi-currency account
+            reported=True,
+            balances=[
+                AccountBalance(
+                    Money(10.00000000, BTC),
+                    Money(0.00000000, BTC),
+                    Money(10.00000000, BTC),
+                ),
+                AccountBalance(
+                    Money(100_000.00000000, USDT),
+                    Money(0.00000000, USDT),
+                    Money(100_000.00000000, USDT),
+                ),
+            ],
+            margins=[],
+            info={},
+            event_id=UUID4(),
+            ts_event=0,
+            ts_init=0,
+        )
+
+        self.portfolio.update_account(state)
+
+        account = self.portfolio.account(BINANCE)
+
+        # Create order
+        order = self.order_factory.market(  # <-- order value 150_000 USDT
+            BTCUSDT_BINANCE.id,
+            OrderSide.BUY,
+            Quantity.from_str("3.0"),
+        )
+
+        self.cache.add_order(order, position_id=None)
+
+        self.exec_engine.process(TestEventStubs.order_submitted(order, account_id=account_id))
+
+        # Act, Assert: push account to negative balance (wouldn't normally be allowed by risk engine)
+        # TODO: The below is the old test prior to validating balance updates
+        #  in the account manager. Leaving here pending accounts refactoring
+        # with pytest.raises(ValueError):
+        #     fill = TestEventStubs.order_filled(
+        #         order,
+        #         instrument=BTCUSDT_BINANCE,
+        #         account_id=account_id,
+        #         last_px=Price.from_str("100_000"),
+        #     )
+        #     self.exec_engine.process(fill)
+        assert account.balances_total()[BTC] == Money(10.00000000, BTC)
+        assert account.balances_total()[USDT] == Money(100_000.00000000, USDT)
+
+    def test_update_orders_open_cash_account(self):
+        # Arrange
+        AccountFactory.register_calculated_account("BINANCE")
+
+        account_id = AccountId("BINANCE-000")
+        state = AccountState(
+            account_id=account_id,
+            account_type=AccountType.CASH,
+            base_currency=None,  # Multi-currency account
+            reported=True,
+            balances=[
+                AccountBalance(
+                    Money(10.00000000, BTC),
+                    Money(0.00000000, BTC),
+                    Money(10.00000000, BTC),
+                ),
+                AccountBalance(
+                    Money(100000.00000000, USDT),
+                    Money(0.00000000, USDT),
+                    Money(100000.00000000, USDT),
+                ),
+            ],
+            margins=[],
+            info={},
+            event_id=UUID4(),
+            ts_event=0,
+            ts_init=0,
+        )
+
+        self.portfolio.update_account(state)
+
+        # Create open order
         order = self.order_factory.limit(
             BTCUSDT_BINANCE.id,
             OrderSide.BUY,
@@ -240,17 +349,17 @@ class TestPortfolio:
         self.cache.add_order(order, position_id=None)
 
         # Act: push order state to ACCEPTED
-        self.exec_engine.process(TestStubs.event_order_submitted(order, account_id=account_id))
-        self.exec_engine.process(TestStubs.event_order_accepted(order, account_id=account_id))
+        self.exec_engine.process(TestEventStubs.order_submitted(order, account_id=account_id))
+        self.exec_engine.process(TestEventStubs.order_accepted(order, account_id=account_id))
 
         # Assert
         assert self.portfolio.balances_locked(BINANCE)[USDT].as_decimal() == 50100
 
-    def test_update_orders_working_margin_account(self):
+    def test_update_orders_open_margin_account(self):
         # Arrange
         AccountFactory.register_calculated_account("BINANCE")
 
-        account_id = AccountId("BINANCE", "01234")
+        account_id = AccountId("BINANCE-01234")
         state = AccountState(
             account_id=account_id,
             account_type=AccountType.MARGIN,
@@ -258,24 +367,22 @@ class TestPortfolio:
             reported=True,
             balances=[
                 AccountBalance(
-                    BTC,
                     Money(10.00000000, BTC),
                     Money(0.00000000, BTC),
                     Money(10.00000000, BTC),
                 ),
                 AccountBalance(
-                    ETH,
                     Money(20.00000000, ETH),
                     Money(0.00000000, ETH),
                     Money(20.00000000, ETH),
                 ),
                 AccountBalance(
-                    USDT,
                     Money(100000.00000000, USDT),
                     Money(0.00000000, USDT),
                     Money(100000.00000000, USDT),
                 ),
             ],
+            margins=[],
             info={},
             event_id=UUID4(),
             ts_event=0,
@@ -284,7 +391,7 @@ class TestPortfolio:
 
         self.portfolio.update_account(state)
 
-        # Create two working orders
+        # Create two open orders
         order1 = self.order_factory.stop_market(
             BTCUSDT_BINANCE.id,
             OrderSide.BUY,
@@ -303,12 +410,12 @@ class TestPortfolio:
         self.cache.add_order(order2, position_id=None)
 
         # Push states to ACCEPTED
-        order1.apply(TestStubs.event_order_submitted(order1))
+        order1.apply(TestEventStubs.order_submitted(order1))
         self.cache.update_order(order1)
-        order1.apply(TestStubs.event_order_accepted(order1))
+        order1.apply(TestEventStubs.order_accepted(order1))
         self.cache.update_order(order1)
 
-        filled1 = TestStubs.event_order_filled(
+        filled1 = TestEventStubs.order_filled(
             order1,
             instrument=BTCUSDT_BINANCE,
             strategy_id=StrategyId("S-1"),
@@ -330,29 +437,29 @@ class TestPortfolio:
         )
 
         # Act
-        self.portfolio.update_tick(last)
+        self.portfolio.update_quote_tick(last)
         self.portfolio.initialize_orders()
 
         # Assert
-        assert self.portfolio.margins_init(BINANCE) == {}
+        assert self.portfolio.margins_init(BINANCE) == {BTCUSDT_BINANCE.id: Money("0E-8", USDT)}
 
     def test_order_accept_updates_margin_init(self):
         # Arrange
         AccountFactory.register_calculated_account("BINANCE")
 
         state = AccountState(
-            account_id=AccountId("BETFAIR", "01234"),
+            account_id=AccountId("BETFAIR-01234"),
             account_type=AccountType.MARGIN,
             base_currency=GBP,
             reported=True,
             balances=[
                 AccountBalance(
-                    currency=GBP,
                     total=Money(1000, GBP),
                     free=Money(1000, GBP),
                     locked=Money(0, GBP),
                 ),
             ],
+            margins=[],
             info={},
             event_id=UUID4(),
             ts_event=0,
@@ -363,7 +470,7 @@ class TestPortfolio:
 
         self.portfolio.update_account(state)
 
-        # Create a passive order
+        # Create a limit order
         order1 = self.order_factory.limit(
             BETTING_INSTRUMENT.id,
             OrderSide.BUY,
@@ -374,9 +481,9 @@ class TestPortfolio:
         self.cache.add_order(order1, position_id=None)
 
         # Push states to ACCEPTED
-        order1.apply(TestStubs.event_order_submitted(order1))
+        order1.apply(TestEventStubs.order_submitted(order1))
         self.cache.update_order(order1)
-        order1.apply(TestStubs.event_order_accepted(order1, venue_order_id=VenueOrderId("1")))
+        order1.apply(TestEventStubs.order_accepted(order1, venue_order_id=VenueOrderId("1")))
         self.cache.update_order(order1)
 
         # Act
@@ -389,7 +496,7 @@ class TestPortfolio:
         # Arrange
         AccountFactory.register_calculated_account("BINANCE")
 
-        account_id = AccountId("BINANCE", "01234")
+        account_id = AccountId("BINANCE-01234")
         state = AccountState(
             account_id=account_id,
             account_type=AccountType.CASH,
@@ -397,18 +504,17 @@ class TestPortfolio:
             reported=True,
             balances=[
                 AccountBalance(
-                    BTC,
                     Money(10.00000000, BTC),
                     Money(0.00000000, BTC),
                     Money(10.00000000, BTC),
                 ),
                 AccountBalance(
-                    ETH,
                     Money(20.00000000, ETH),
                     Money(0.00000000, ETH),
                     Money(20.00000000, ETH),
                 ),
             ],
+            margins=[],
             info={},
             event_id=UUID4(),
             ts_event=0,
@@ -421,25 +527,25 @@ class TestPortfolio:
         order1 = self.order_factory.market(
             BTCUSDT_BINANCE.id,
             OrderSide.BUY,
-            Quantity.from_str("10.50000000"),
+            Quantity.from_str("10.500000"),
         )
 
         order2 = self.order_factory.market(
             BTCUSDT_BINANCE.id,
             OrderSide.SELL,
-            Quantity.from_str("10.50000000"),
+            Quantity.from_str("10.500000"),
         )
 
         self.cache.add_order(order1, position_id=None)
         self.cache.add_order(order2, position_id=None)
 
         # Push states to ACCEPTED
-        order1.apply(TestStubs.event_order_submitted(order1))
+        order1.apply(TestEventStubs.order_submitted(order1))
         self.cache.update_order(order1)
-        order1.apply(TestStubs.event_order_accepted(order1))
+        order1.apply(TestEventStubs.order_accepted(order1))
         self.cache.update_order(order1)
 
-        fill1 = TestStubs.event_order_filled(
+        fill1 = TestEventStubs.order_filled(
             order1,
             instrument=BTCUSDT_BINANCE,
             strategy_id=StrategyId("S-1"),
@@ -448,7 +554,7 @@ class TestPortfolio:
             last_px=Price.from_str("25000.00"),
         )
 
-        fill2 = TestStubs.event_order_filled(
+        fill2 = TestEventStubs.order_filled(
             order2,
             instrument=BTCUSDT_BINANCE,
             strategy_id=StrategyId("S-1"),
@@ -463,10 +569,10 @@ class TestPortfolio:
         order3 = self.order_factory.market(
             BTCUSDT_BINANCE.id,
             OrderSide.BUY,
-            Quantity.from_str("10.00000000"),
+            Quantity.from_str("10.000000"),
         )
 
-        fill3 = TestStubs.event_order_filled(
+        fill3 = TestEventStubs.order_filled(
             order3,
             instrument=BTCUSDT_BINANCE,
             strategy_id=StrategyId("S-1"),
@@ -492,7 +598,7 @@ class TestPortfolio:
         self.cache.add_position(position1, OMSType.HEDGING)
         self.cache.add_position(position2, OMSType.HEDGING)
         self.portfolio.initialize_positions()
-        self.portfolio.update_tick(last)
+        self.portfolio.update_quote_tick(last)
 
         # Assert
         assert self.portfolio.is_net_long(BTCUSDT_BINANCE.id)
@@ -501,7 +607,7 @@ class TestPortfolio:
         # Arrange
         AccountFactory.register_calculated_account("BINANCE")
 
-        account_id = AccountId("BINANCE", "01234")
+        account_id = AccountId("BINANCE-01234")
         state = AccountState(
             account_id=account_id,
             account_type=AccountType.MARGIN,
@@ -509,24 +615,22 @@ class TestPortfolio:
             reported=True,
             balances=[
                 AccountBalance(
-                    BTC,
                     Money(10.00000000, BTC),
                     Money(0.00000000, BTC),
                     Money(10.00000000, BTC),
                 ),
                 AccountBalance(
-                    ETH,
                     Money(20.00000000, ETH),
                     Money(0.00000000, ETH),
                     Money(20.00000000, ETH),
                 ),
                 AccountBalance(
-                    USDT,
                     Money(100000.00000000, USDT),
                     Money(0.00000000, USDT),
                     Money(100000.00000000, USDT),
                 ),
             ],
+            margins=[],
             info={},
             event_id=UUID4(),
             ts_event=0,
@@ -541,7 +645,7 @@ class TestPortfolio:
             Quantity.from_str("10.000000"),
         )
 
-        fill = TestStubs.event_order_filled(
+        fill = TestEventStubs.order_filled(
             order=order,
             instrument=BTCUSDT_BINANCE,
             strategy_id=StrategyId("S-001"),
@@ -561,13 +665,13 @@ class TestPortfolio:
         )
 
         self.cache.add_quote_tick(last)
-        self.portfolio.update_tick(last)
+        self.portfolio.update_quote_tick(last)
 
         position = Position(instrument=BTCUSDT_BINANCE, fill=fill)
 
         # Act
         self.cache.add_position(position, OMSType.HEDGING)
-        self.portfolio.update_position(TestStubs.event_position_opened(position))
+        self.portfolio.update_position(TestEventStubs.position_opened(position))
 
         # Assert
         assert self.portfolio.net_exposures(BINANCE) == {USDT: Money(105100.00000000, USDT)}
@@ -587,7 +691,7 @@ class TestPortfolio:
         # Arrange
         AccountFactory.register_calculated_account("BINANCE")
 
-        account_id = AccountId("BINANCE", "01234")
+        account_id = AccountId("BINANCE-01234")
         state = AccountState(
             account_id=account_id,
             account_type=AccountType.MARGIN,
@@ -595,24 +699,22 @@ class TestPortfolio:
             reported=True,
             balances=[
                 AccountBalance(
-                    BTC,
                     Money(10.00000000, BTC),
                     Money(0.00000000, BTC),
                     Money(10.00000000, BTC),
                 ),
                 AccountBalance(
-                    ETH,
                     Money(20.00000000, ETH),
                     Money(0.00000000, ETH),
                     Money(20.00000000, ETH),
                 ),
                 AccountBalance(
-                    USDT,
                     Money(100000.00000000, USDT),
                     Money(0.00000000, USDT),
                     Money(100000.00000000, USDT),
                 ),
             ],
+            margins=[],
             info={},
             event_id=UUID4(),
             ts_event=0,
@@ -627,7 +729,7 @@ class TestPortfolio:
             Quantity.from_str("0.515"),
         )
 
-        fill = TestStubs.event_order_filled(
+        fill = TestEventStubs.order_filled(
             order=order,
             instrument=BTCUSDT_BINANCE,
             strategy_id=StrategyId("S-001"),
@@ -647,13 +749,13 @@ class TestPortfolio:
         )
 
         self.cache.add_quote_tick(last)
-        self.portfolio.update_tick(last)
+        self.portfolio.update_quote_tick(last)
 
         position = Position(instrument=BTCUSDT_BINANCE, fill=fill)
 
         # Act
         self.cache.add_position(position, OMSType.HEDGING)
-        self.portfolio.update_position(TestStubs.event_position_opened(position))
+        self.portfolio.update_position(TestEventStubs.position_opened(position))
 
         # Assert
         assert self.portfolio.net_exposures(BINANCE) == {USDT: Money(7987.77875000, USDT)}
@@ -663,7 +765,7 @@ class TestPortfolio:
         }
         assert self.portfolio.net_exposure(BTCUSDT_BINANCE.id) == Money(7987.77875000, USDT)
         assert self.portfolio.unrealized_pnl(BTCUSDT_BINANCE.id) == Money(-262.77875000, USDT)
-        assert self.portfolio.net_position(order.instrument_id) == Decimal("-0.515")
+        assert self.portfolio.net_position(order.instrument_id) == -0.515
         assert not self.portfolio.is_net_long(order.instrument_id)
         assert self.portfolio.is_net_short(order.instrument_id)
         assert not self.portfolio.is_flat(order.instrument_id)
@@ -673,7 +775,7 @@ class TestPortfolio:
         # Arrange
         AccountFactory.register_calculated_account("BITMEX")
 
-        account_id = AccountId("BITMEX", "01234")
+        account_id = AccountId("BITMEX-01234")
         state = AccountState(
             account_id=account_id,
             account_type=AccountType.MARGIN,
@@ -681,18 +783,17 @@ class TestPortfolio:
             reported=True,
             balances=[
                 AccountBalance(
-                    BTC,
                     Money(10.00000000, BTC),
                     Money(0.00000000, BTC),
                     Money(10.00000000, BTC),
                 ),
                 AccountBalance(
-                    ETH,
                     Money(20.00000000, ETH),
                     Money(0.00000000, ETH),
                     Money(20.00000000, ETH),
                 ),
             ],
+            margins=[],
             info={},
             event_id=UUID4(),
             ts_event=0,
@@ -723,8 +824,8 @@ class TestPortfolio:
 
         self.cache.add_quote_tick(last_ethusd)
         self.cache.add_quote_tick(last_btcusd)
-        self.portfolio.update_tick(last_ethusd)
-        self.portfolio.update_tick(last_btcusd)
+        self.portfolio.update_quote_tick(last_ethusd)
+        self.portfolio.update_quote_tick(last_btcusd)
 
         order = self.order_factory.market(
             ETHUSD_BITMEX.id,
@@ -732,7 +833,7 @@ class TestPortfolio:
             Quantity.from_int(10000),
         )
 
-        fill = TestStubs.event_order_filled(
+        fill = TestEventStubs.order_filled(
             order=order,
             instrument=ETHUSD_BITMEX,
             strategy_id=StrategyId("S-001"),
@@ -745,7 +846,7 @@ class TestPortfolio:
 
         # Act
         self.cache.add_position(position, OMSType.HEDGING)
-        self.portfolio.update_position(TestStubs.event_position_opened(position))
+        self.portfolio.update_position(TestEventStubs.position_opened(position))
 
         # Assert
         assert self.portfolio.net_exposures(BITMEX) == {ETH: Money(26.59220848, ETH)}
@@ -758,24 +859,23 @@ class TestPortfolio:
         AccountFactory.register_calculated_account("BITMEX")
 
         state = AccountState(
-            account_id=AccountId("BITMEX", "01234"),
+            account_id=AccountId("BITMEX-01234"),
             account_type=AccountType.MARGIN,
             base_currency=BTC,
             reported=True,
             balances=[
                 AccountBalance(
-                    BTC,
                     Money(10.00000000, BTC),
                     Money(0.00000000, BTC),
                     Money(10.00000000, BTC),
                 ),
                 AccountBalance(
-                    ETH,
                     Money(20.00000000, ETH),
                     Money(0.00000000, ETH),
                     Money(20.00000000, ETH),
                 ),
             ],
+            margins=[],
             info={},
             event_id=UUID4(),
             ts_event=0,
@@ -791,10 +891,10 @@ class TestPortfolio:
         )
 
         self.cache.add_order(order, position_id=None)
-        self.exec_engine.process(TestStubs.event_order_submitted(order))
-        self.exec_engine.process(TestStubs.event_order_accepted(order))
+        self.exec_engine.process(TestEventStubs.order_submitted(order))
+        self.exec_engine.process(TestEventStubs.order_accepted(order))
 
-        fill = TestStubs.event_order_filled(
+        fill = TestEventStubs.order_filled(
             order=order,
             instrument=ETHUSD_BITMEX,
             strategy_id=StrategyId("S-1"),
@@ -806,7 +906,7 @@ class TestPortfolio:
 
         position = Position(instrument=ETHUSD_BITMEX, fill=fill)
 
-        self.portfolio.update_position(TestStubs.event_position_opened(position))
+        self.portfolio.update_position(TestEventStubs.position_opened(position))
 
         # Act
         result = self.portfolio.unrealized_pnls(BITMEX)
@@ -818,7 +918,7 @@ class TestPortfolio:
         # Arrange
         AccountFactory.register_calculated_account("BITMEX")
 
-        account_id = AccountId("BITMEX", "01234")
+        account_id = AccountId("BITMEX-01234")
         state = AccountState(
             account_id=account_id,
             account_type=AccountType.MARGIN,
@@ -826,12 +926,12 @@ class TestPortfolio:
             reported=True,
             balances=[
                 AccountBalance(
-                    BTC,
                     Money(10.00000000, BTC),
                     Money(0.00000000, BTC),
                     Money(10.00000000, BTC),
                 ),
             ],
+            margins=[],
             info={},
             event_id=UUID4(),
             ts_event=0,
@@ -846,7 +946,7 @@ class TestPortfolio:
             Quantity.from_int(100),
         )
 
-        fill = TestStubs.event_order_filled(
+        fill = TestEventStubs.order_filled(
             order=order,
             instrument=ETHUSD_BITMEX,
             strategy_id=StrategyId("S-1"),
@@ -877,12 +977,12 @@ class TestPortfolio:
 
         position = Position(instrument=ETHUSD_BITMEX, fill=fill)
 
-        self.portfolio.update_position(TestStubs.event_position_opened(position))
+        self.portfolio.update_position(TestEventStubs.position_opened(position))
         self.cache.add_position(position, OMSType.HEDGING)
         self.cache.add_quote_tick(last_ethusd)
         self.cache.add_quote_tick(last_xbtusd)
-        self.portfolio.update_tick(last_ethusd)
-        self.portfolio.update_tick(last_xbtusd)
+        self.portfolio.update_quote_tick(last_ethusd)
+        self.portfolio.update_quote_tick(last_xbtusd)
 
         # Act
         result = self.portfolio.net_exposures(BITMEX)
@@ -894,7 +994,7 @@ class TestPortfolio:
         # Arrange
         AccountFactory.register_calculated_account("SIM")
 
-        account_id = AccountId("SIM", "01234")
+        account_id = AccountId("SIM-01234")
         state = AccountState(
             account_id=account_id,
             account_type=AccountType.MARGIN,
@@ -902,12 +1002,12 @@ class TestPortfolio:
             reported=True,
             balances=[
                 AccountBalance(
-                    USD,
                     Money(1_000_000, USD),
                     Money(0, USD),
                     Money(1_000_000, USD),
                 ),
             ],
+            margins=[],
             info={},
             event_id=UUID4(),
             ts_event=0,
@@ -938,8 +1038,8 @@ class TestPortfolio:
 
         self.cache.add_quote_tick(last_audusd)
         self.cache.add_quote_tick(last_gbpusd)
-        self.portfolio.update_tick(last_audusd)
-        self.portfolio.update_tick(last_gbpusd)
+        self.portfolio.update_quote_tick(last_audusd)
+        self.portfolio.update_quote_tick(last_gbpusd)
 
         order1 = self.order_factory.market(
             AUDUSD_SIM.id,
@@ -956,7 +1056,7 @@ class TestPortfolio:
         self.cache.add_order(order1, position_id=None)
         self.cache.add_order(order2, position_id=None)
 
-        fill1 = TestStubs.event_order_filled(
+        fill1 = TestEventStubs.order_filled(
             order1,
             instrument=AUDUSD_SIM,
             strategy_id=StrategyId("S-1"),
@@ -965,7 +1065,7 @@ class TestPortfolio:
             last_px=Price.from_str("1.00000"),
         )
 
-        fill2 = TestStubs.event_order_filled(
+        fill2 = TestEventStubs.order_filled(
             order2,
             instrument=GBPUSD_SIM,
             strategy_id=StrategyId("S-1"),
@@ -979,8 +1079,8 @@ class TestPortfolio:
 
         position1 = Position(instrument=AUDUSD_SIM, fill=fill1)
         position2 = Position(instrument=GBPUSD_SIM, fill=fill2)
-        position_opened1 = TestStubs.event_position_opened(position1)
-        position_opened2 = TestStubs.event_position_opened(position2)
+        position_opened1 = TestEventStubs.position_opened(position1)
+        position_opened2 = TestEventStubs.position_opened(position2)
 
         # Act
         self.cache.add_position(position1, OMSType.HEDGING)
@@ -1010,7 +1110,7 @@ class TestPortfolio:
         # Arrange
         AccountFactory.register_calculated_account("SIM")
 
-        account_id = AccountId("SIM", "01234")
+        account_id = AccountId("SIM-01234")
         state = AccountState(
             account_id=account_id,
             account_type=AccountType.MARGIN,
@@ -1018,12 +1118,12 @@ class TestPortfolio:
             reported=True,
             balances=[
                 AccountBalance(
-                    USD,
                     Money(1_000_000, USD),
                     Money(0, USD),
                     Money(1_000_000, USD),
                 ),
             ],
+            margins=[],
             info={},
             event_id=UUID4(),
             ts_event=0,
@@ -1043,7 +1143,7 @@ class TestPortfolio:
         )
 
         self.cache.add_quote_tick(last_audusd)
-        self.portfolio.update_tick(last_audusd)
+        self.portfolio.update_quote_tick(last_audusd)
 
         order1 = self.order_factory.market(
             AUDUSD_SIM.id,
@@ -1051,7 +1151,7 @@ class TestPortfolio:
             Quantity.from_int(100000),
         )
 
-        fill1 = TestStubs.event_order_filled(
+        fill1 = TestEventStubs.order_filled(
             order1,
             instrument=AUDUSD_SIM,
             strategy_id=StrategyId("S-1"),
@@ -1062,7 +1162,7 @@ class TestPortfolio:
 
         position = Position(instrument=AUDUSD_SIM, fill=fill1)
         self.cache.add_position(position, OMSType.HEDGING)
-        self.portfolio.update_position(TestStubs.event_position_opened(position))
+        self.portfolio.update_position(TestEventStubs.position_opened(position))
 
         order2 = self.order_factory.market(
             AUDUSD_SIM.id,
@@ -1070,7 +1170,7 @@ class TestPortfolio:
             Quantity.from_int(50000),
         )
 
-        order2_filled = TestStubs.event_order_filled(
+        order2_filled = TestEventStubs.order_filled(
             order2,
             instrument=AUDUSD_SIM,
             strategy_id=StrategyId("S-1"),
@@ -1082,7 +1182,7 @@ class TestPortfolio:
         position.apply(order2_filled)
 
         # Act
-        self.portfolio.update_position(TestStubs.event_position_changed(position))
+        self.portfolio.update_position(TestEventStubs.position_changed(position))
 
         # Assert
         assert self.portfolio.net_exposures(SIM) == {USD: Money(40250.50, USD)}
@@ -1102,7 +1202,7 @@ class TestPortfolio:
         # Arrange
         AccountFactory.register_calculated_account("SIM")
 
-        account_id = AccountId("SIM", "01234")
+        account_id = AccountId("SIM-01234")
         state = AccountState(
             account_id=account_id,
             account_type=AccountType.MARGIN,
@@ -1110,12 +1210,12 @@ class TestPortfolio:
             reported=True,
             balances=[
                 AccountBalance(
-                    USD,
                     Money(1_000_000, USD),
                     Money(0, USD),
                     Money(1_000_000, USD),
                 ),
             ],
+            margins=[],
             info={},
             event_id=UUID4(),
             ts_event=0,
@@ -1130,7 +1230,7 @@ class TestPortfolio:
             Quantity.from_int(100000),
         )
 
-        fill1 = TestStubs.event_order_filled(
+        fill1 = TestEventStubs.order_filled(
             order1,
             instrument=AUDUSD_SIM,
             strategy_id=StrategyId("S-1"),
@@ -1141,7 +1241,7 @@ class TestPortfolio:
 
         position = Position(instrument=AUDUSD_SIM, fill=fill1)
         self.cache.add_position(position, OMSType.HEDGING)
-        self.portfolio.update_position(TestStubs.event_position_opened(position))
+        self.portfolio.update_position(TestEventStubs.position_opened(position))
 
         order2 = self.order_factory.market(
             AUDUSD_SIM.id,
@@ -1149,7 +1249,7 @@ class TestPortfolio:
             Quantity.from_int(100000),
         )
 
-        order2_filled = TestStubs.event_order_filled(
+        order2_filled = TestEventStubs.order_filled(
             order2,
             instrument=AUDUSD_SIM,
             strategy_id=StrategyId("S-1"),
@@ -1162,7 +1262,7 @@ class TestPortfolio:
         self.cache.update_position(position)
 
         # Act
-        self.portfolio.update_position(TestStubs.event_position_closed(position))
+        self.portfolio.update_position(TestEventStubs.position_closed(position))
 
         # Assert
         assert self.portfolio.net_exposures(SIM) == {}
@@ -1178,7 +1278,7 @@ class TestPortfolio:
 
     def test_several_positions_with_different_instruments_updates_portfolio(self):
         # Arrange
-        account_id = AccountId("SIM", "01234")
+        account_id = AccountId("SIM-01234")
         state = AccountState(
             account_id=account_id,
             account_type=AccountType.MARGIN,
@@ -1186,12 +1286,12 @@ class TestPortfolio:
             reported=True,
             balances=[
                 AccountBalance(
-                    USD,
                     Money(1_000_000, USD),
                     Money(0, USD),
                     Money(1_000_000, USD),
                 ),
             ],
+            margins=[],
             info={},
             event_id=UUID4(),
             ts_event=0,
@@ -1224,7 +1324,7 @@ class TestPortfolio:
             Quantity.from_int(100000),
         )
 
-        fill1 = TestStubs.event_order_filled(
+        fill1 = TestEventStubs.order_filled(
             order1,
             instrument=AUDUSD_SIM,
             strategy_id=StrategyId("S-1"),
@@ -1233,7 +1333,7 @@ class TestPortfolio:
             last_px=Price.from_str("1.00000"),
         )
 
-        fill2 = TestStubs.event_order_filled(
+        fill2 = TestEventStubs.order_filled(
             order2,
             instrument=AUDUSD_SIM,
             strategy_id=StrategyId("S-1"),
@@ -1242,7 +1342,7 @@ class TestPortfolio:
             last_px=Price.from_str("1.00000"),
         )
 
-        fill3 = TestStubs.event_order_filled(
+        fill3 = TestEventStubs.order_filled(
             order3,
             instrument=GBPUSD_SIM,
             strategy_id=StrategyId("S-1"),
@@ -1251,7 +1351,7 @@ class TestPortfolio:
             last_px=Price.from_str("1.00000"),
         )
 
-        fill4 = TestStubs.event_order_filled(
+        fill4 = TestEventStubs.order_filled(
             order4,
             instrument=GBPUSD_SIM,
             strategy_id=StrategyId("S-1"),
@@ -1286,21 +1386,21 @@ class TestPortfolio:
 
         self.cache.add_quote_tick(last_audusd)
         self.cache.add_quote_tick(last_gbpusd)
-        self.portfolio.update_tick(last_audusd)
-        self.portfolio.update_tick(last_gbpusd)
+        self.portfolio.update_quote_tick(last_audusd)
+        self.portfolio.update_quote_tick(last_gbpusd)
 
         self.cache.add_position(position1, OMSType.HEDGING)
         self.cache.add_position(position2, OMSType.HEDGING)
         self.cache.add_position(position3, OMSType.HEDGING)
 
         # Act
-        self.portfolio.update_position(TestStubs.event_position_opened(position1))
-        self.portfolio.update_position(TestStubs.event_position_opened(position2))
-        self.portfolio.update_position(TestStubs.event_position_opened(position3))
+        self.portfolio.update_position(TestEventStubs.position_opened(position1))
+        self.portfolio.update_position(TestEventStubs.position_opened(position2))
+        self.portfolio.update_position(TestEventStubs.position_opened(position3))
 
         position3.apply(fill4)
         self.cache.update_position(position3)
-        self.portfolio.update_position(TestStubs.event_position_closed(position3))
+        self.portfolio.update_position(TestEventStubs.position_closed(position3))
 
         # Assert
         assert {USD: Money(-38998.00, USD)} == self.portfolio.unrealized_pnls(SIM)

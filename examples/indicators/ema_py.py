@@ -15,17 +15,17 @@
 
 from nautilus_trader.core.correctness import PyCondition
 from nautilus_trader.indicators.base.indicator import Indicator
-from nautilus_trader.model.c_enums.price_type import PriceType
 from nautilus_trader.model.data.bar import Bar
 from nautilus_trader.model.data.tick import QuoteTick
 from nautilus_trader.model.data.tick import TradeTick
+from nautilus_trader.model.enums import PriceType
 
 
 # It's generally recommended to code indicators in Cython as per the built-in
 # indicators found in the `indicators` subpackage. However this is an example
 # demonstrating an equivalent EMA indicator written in pure Python.
 
-# Note: The `MovingAverage` base class has not been used in this example to
+# Note: The `MovingAverage` base class has not being used in this example to
 # provide more clarity on how to implement custom indicators. Basically you need
 # to inherit from `Indicator` and override the methods shown below.
 

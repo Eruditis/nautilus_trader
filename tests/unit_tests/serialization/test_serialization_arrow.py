@@ -15,7 +15,6 @@
 
 import copy
 import os
-import sys
 from typing import Any
 
 import pytest
@@ -39,10 +38,13 @@ from nautilus_trader.model.orderbook.data import OrderBookDelta
 from nautilus_trader.model.orderbook.data import OrderBookDeltas
 from nautilus_trader.model.orderbook.data import OrderBookSnapshot
 from nautilus_trader.model.position import Position
-from nautilus_trader.persistence.catalog import DataCatalog
+from nautilus_trader.persistence.catalog.parquet import ParquetDataCatalog
 from nautilus_trader.persistence.external.core import write_objects
 from nautilus_trader.serialization.arrow.serializer import ParquetSerializer
-from tests.test_kit.stubs import TestStubs
+from tests.test_kit.stubs.data import TestDataStubs
+from tests.test_kit.stubs.events import TestEventStubs
+from tests.test_kit.stubs.execution import TestExecStubs
+from tests.test_kit.stubs.identifiers import TestIdStubs
 from tests.unit_tests.serialization.conftest import nautilus_objects
 
 
@@ -52,23 +54,22 @@ ETHUSDT_BINANCE = TestInstrumentProvider.ethusdt_binance()
 
 def _reset():
     """Cleanup resources before each test run"""
-    os.environ["NAUTILUS_CATALOG"] = "memory:///root/"
-    catalog = DataCatalog.from_env()
+    os.environ["NAUTILUS_PATH"] = "memory:///.nautilus/"
+    catalog = ParquetDataCatalog.from_env()
     assert isinstance(catalog.fs, MemoryFileSystem)
     try:
         catalog.fs.rm("/", recursive=True)
     except FileNotFoundError:
         pass
-    catalog.fs.mkdir("/root/data")
-    assert catalog.fs.exists("/root/")
+    catalog.fs.mkdir("/.nautilus/catalog")
+    assert catalog.fs.exists("/.nautilus/catalog/")
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="does not run on windows")
 class TestParquetSerializer:
     def setup(self):
         # Fixture Setup
         _reset()
-        self.catalog = DataCatalog(path="/root", fs_protocol="memory")
+        self.catalog = ParquetDataCatalog(path="/root", fs_protocol="memory")
         self.order_factory = OrderFactory(
             trader_id=TraderId("T-001"),
             strategy_id=StrategyId("S-001"),
@@ -80,16 +81,16 @@ class TestParquetSerializer:
             Quantity.from_int(100000),
         )
         self.order_submitted = copy.copy(self.order)
-        self.order_submitted.apply(TestStubs.event_order_submitted(self.order))
+        self.order_submitted.apply(TestEventStubs.order_submitted(self.order))
 
         self.order_accepted = copy.copy(self.order_submitted)
-        self.order_accepted.apply(TestStubs.event_order_accepted(self.order_submitted))
+        self.order_accepted.apply(TestEventStubs.order_accepted(self.order_submitted))
 
         self.order_pending_cancel = copy.copy(self.order_accepted)
-        self.order_pending_cancel.apply(TestStubs.event_order_pending_cancel(self.order_accepted))
+        self.order_pending_cancel.apply(TestEventStubs.order_pending_cancel(self.order_accepted))
 
         self.order_cancelled = copy.copy(self.order_pending_cancel)
-        self.order_cancelled.apply(TestStubs.event_order_canceled(self.order_pending_cancel))
+        self.order_cancelled.apply(TestEventStubs.order_canceled(self.order_pending_cancel))
 
     def _test_serialization(self, obj: Any):
         cls = type(obj)
@@ -105,7 +106,7 @@ class TestParquetSerializer:
         assert deserialized == expected
         write_objects(catalog=self.catalog, chunk=[obj])
         df = self.catalog._query(cls=cls)
-        assert len(df) == 1
+        assert len(df) in (1, 2)
         nautilus = self.catalog._query(cls=cls, as_dataframe=False)[0]
         assert nautilus.ts_init == 0
         return True
@@ -113,17 +114,21 @@ class TestParquetSerializer:
     @pytest.mark.parametrize(
         "tick",
         [
-            TestStubs.ticker(),
-            TestStubs.quote_tick_5decimal(),
-            TestStubs.trade_tick_5decimal(),
+            TestDataStubs.ticker(),
+            TestDataStubs.quote_tick_5decimal(),
+            TestDataStubs.trade_tick_5decimal(),
         ],
     )
     def test_serialize_and_deserialize_tick(self, tick):
         self._test_serialization(obj=tick)
 
+    def test_serialize_and_deserialize_bar(self):
+        bar = TestDataStubs.bar_5decimal()
+        self._test_serialization(obj=bar)
+
     def test_serialize_and_deserialize_order_book_delta(self):
         delta = OrderBookDelta(
-            instrument_id=TestStubs.audusd_id(),
+            instrument_id=TestIdStubs.audusd_id(),
             book_type=BookType.L2_MBP,
             action=BookAction.CLEAR,
             order=None,
@@ -136,7 +141,7 @@ class TestParquetSerializer:
 
         # Assert
         expected = OrderBookDeltas(
-            instrument_id=TestStubs.audusd_id(),
+            instrument_id=TestIdStubs.audusd_id(),
             book_type=BookType.L2_MBP,
             deltas=[delta],
             ts_event=0,
@@ -153,7 +158,7 @@ class TestParquetSerializer:
             "book_type": "L2_MBP",
         }
         deltas = OrderBookDeltas(
-            instrument_id=TestStubs.audusd_id(),
+            instrument_id=TestIdStubs.audusd_id(),
             book_type=BookType.L2_MBP,
             deltas=[
                 OrderBookDelta.from_dict(
@@ -226,7 +231,7 @@ class TestParquetSerializer:
             },
         ]
         deltas = OrderBookDeltas(
-            instrument_id=TestStubs.audusd_id(),
+            instrument_id=TestIdStubs.audusd_id(),
             book_type=BookType.L2_MBP,
             deltas=[OrderBookDelta.from_dict({**kw, **d}) for d in deltas],
             ts_event=0,
@@ -247,7 +252,7 @@ class TestParquetSerializer:
         ]
 
     def test_serialize_and_deserialize_order_book_snapshot(self):
-        book = TestStubs.order_book_snapshot()
+        book = TestDataStubs.order_book_snapshot()
 
         serialized = ParquetSerializer.serialize(book)
         deserialized = ParquetSerializer.deserialize(cls=OrderBookSnapshot, chunk=serialized)
@@ -257,7 +262,7 @@ class TestParquetSerializer:
         write_objects(catalog=self.catalog, chunk=[book])
 
     def test_serialize_and_deserialize_component_state_changed(self):
-        event = TestStubs.event_component_state_changed()
+        event = TestEventStubs.component_state_changed()
 
         serialized = ParquetSerializer.serialize(event)
         [deserialized] = ParquetSerializer.deserialize(
@@ -270,7 +275,7 @@ class TestParquetSerializer:
         write_objects(catalog=self.catalog, chunk=[event])
 
     def test_serialize_and_deserialize_trading_state_changed(self):
-        event = TestStubs.event_trading_state_changed()
+        event = TestEventStubs.trading_state_changed()
 
         serialized = ParquetSerializer.serialize(event)
         [deserialized] = ParquetSerializer.deserialize(cls=TradingStateChanged, chunk=[serialized])
@@ -280,9 +285,14 @@ class TestParquetSerializer:
 
         write_objects(catalog=self.catalog, chunk=[event])
 
-    def test_serialize_and_deserialize_account_state(self):
-        event = TestStubs.event_cash_account_state()
-
+    @pytest.mark.parametrize(
+        "event",
+        [
+            TestEventStubs.cash_account_state(),
+            TestEventStubs.margin_account_state(),
+        ],
+    )
+    def test_serialize_and_deserialize_account_state(self, event):
         serialized = ParquetSerializer.serialize(event)
         [deserialized] = ParquetSerializer.deserialize(cls=AccountState, chunk=serialized)
 
@@ -294,28 +304,28 @@ class TestParquetSerializer:
     @pytest.mark.parametrize(
         "event_func",
         [
-            TestStubs.event_order_accepted,
-            TestStubs.event_order_rejected,
-            TestStubs.event_order_submitted,
+            TestEventStubs.order_accepted,
+            TestEventStubs.order_rejected,
+            TestEventStubs.order_submitted,
         ],
     )
     def test_serialize_and_deserialize_order_events_base(self, event_func):
-        order = TestStubs.limit_order()
+        order = TestExecStubs.limit_order()
         event = event_func(order=order)
         self._test_serialization(obj=event)
 
     @pytest.mark.parametrize(
         "event_func",
         [
-            TestStubs.event_order_submitted,
-            TestStubs.event_order_accepted,
-            TestStubs.event_order_canceled,
-            TestStubs.event_order_pending_update,
-            TestStubs.event_order_pending_cancel,
-            TestStubs.event_order_triggered,
-            TestStubs.event_order_expired,
-            TestStubs.event_order_rejected,
-            TestStubs.event_order_canceled,
+            TestEventStubs.order_submitted,
+            TestEventStubs.order_accepted,
+            TestEventStubs.order_canceled,
+            TestEventStubs.order_pending_update,
+            TestEventStubs.order_pending_cancel,
+            TestEventStubs.order_triggered,
+            TestEventStubs.order_expired,
+            TestEventStubs.order_rejected,
+            TestEventStubs.order_canceled,
         ],
     )
     def test_serialize_and_deserialize_order_events_post_accepted(self, event_func):
@@ -326,7 +336,7 @@ class TestParquetSerializer:
     @pytest.mark.parametrize(
         "event_func",
         [
-            TestStubs.event_order_filled,
+            TestEventStubs.order_filled,
         ],
     )
     def test_serialize_and_deserialize_order_events_filled(self, event_func):
@@ -337,8 +347,8 @@ class TestParquetSerializer:
     @pytest.mark.parametrize(
         "position_func",
         [
-            TestStubs.event_position_opened,
-            TestStubs.event_position_changed,
+            TestEventStubs.position_opened,
+            TestEventStubs.position_changed,
         ],
     )
     def test_serialize_and_deserialize_position_events_open_changed(self, position_func):
@@ -349,7 +359,7 @@ class TestParquetSerializer:
             OrderSide.BUY,
             Quantity.from_int(100000),
         )
-        fill3 = TestStubs.event_order_filled(
+        fill3 = TestEventStubs.order_filled(
             order3,
             instrument=instrument,
             position_id=PositionId("P-3"),
@@ -365,7 +375,7 @@ class TestParquetSerializer:
     @pytest.mark.parametrize(
         "position_func",
         [
-            TestStubs.event_position_closed,
+            TestEventStubs.position_closed,
         ],
     )
     def test_serialize_and_deserialize_position_events_closed(self, position_func):
@@ -376,7 +386,7 @@ class TestParquetSerializer:
             OrderSide.BUY,
             Quantity.from_int(100000),
         )
-        open_fill = TestStubs.event_order_filled(
+        open_fill = TestEventStubs.order_filled(
             open_order,
             instrument=instrument,
             position_id=PositionId("P-3"),
@@ -388,7 +398,7 @@ class TestParquetSerializer:
             OrderSide.SELL,
             Quantity.from_int(100000),
         )
-        close_fill = TestStubs.event_order_filled(
+        close_fill = TestEventStubs.order_filled(
             close_order,
             instrument=instrument,
             position_id=PositionId("P-3"),
@@ -405,6 +415,8 @@ class TestParquetSerializer:
     @pytest.mark.parametrize(
         "instrument",
         [
+            TestInstrumentProvider.xbtusd_bitmex(),
+            TestInstrumentProvider.btcusdt_future_binance(),
             TestInstrumentProvider.btcusdt_binance(),
             TestInstrumentProvider.aapl_equity(),
             TestInstrumentProvider.es_future(),
@@ -422,9 +434,7 @@ class TestParquetSerializer:
         df = self.catalog.instruments()
         assert len(df) == 1
 
-    @pytest.mark.parametrize(
-        "name, obj", [(obj.__class__.__name__, obj) for obj in nautilus_objects()]
-    )
-    def test_serialize_and_deserialize_all(self, name, obj):
+    @pytest.mark.parametrize("obj", nautilus_objects())
+    def test_serialize_and_deserialize_all(self, obj):
         # Arrange, Act
         assert self._test_serialization(obj)

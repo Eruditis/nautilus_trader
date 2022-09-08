@@ -16,20 +16,25 @@
 import asyncio
 import os
 from functools import lru_cache
-from typing import Any, Dict, Optional
+from typing import Dict, Optional, Union
 
-from nautilus_trader.adapters.binance.common import BINANCE_VENUE
-from nautilus_trader.adapters.binance.data import BinanceDataClient
-from nautilus_trader.adapters.binance.execution import BinanceSpotExecutionClient
+from nautilus_trader.adapters.binance.common.enums import BinanceAccountType
+from nautilus_trader.adapters.binance.config import BinanceDataClientConfig
+from nautilus_trader.adapters.binance.config import BinanceExecClientConfig
+from nautilus_trader.adapters.binance.futures.data import BinanceFuturesDataClient
+from nautilus_trader.adapters.binance.futures.execution import BinanceFuturesExecutionClient
+from nautilus_trader.adapters.binance.futures.providers import BinanceFuturesInstrumentProvider
 from nautilus_trader.adapters.binance.http.client import BinanceHttpClient
-from nautilus_trader.adapters.binance.providers import BinanceInstrumentProvider
+from nautilus_trader.adapters.binance.spot.data import BinanceSpotDataClient
+from nautilus_trader.adapters.binance.spot.execution import BinanceSpotExecutionClient
+from nautilus_trader.adapters.binance.spot.providers import BinanceSpotInstrumentProvider
 from nautilus_trader.cache.cache import Cache
 from nautilus_trader.common.clock import LiveClock
 from nautilus_trader.common.logging import LiveLogger
 from nautilus_trader.common.logging import Logger
+from nautilus_trader.config import InstrumentProviderConfig
 from nautilus_trader.live.factories import LiveDataClientFactory
-from nautilus_trader.live.factories import LiveExecutionClientFactory
-from nautilus_trader.model.identifiers import AccountId
+from nautilus_trader.live.factories import LiveExecClientFactory
 from nautilus_trader.msgbus.bus import MessageBus
 
 
@@ -37,11 +42,15 @@ HTTP_CLIENTS: Dict[str, BinanceHttpClient] = {}
 
 
 def get_cached_binance_http_client(
-    key: Optional[str],
-    secret: Optional[str],
     loop: asyncio.AbstractEventLoop,
     clock: LiveClock,
     logger: Logger,
+    account_type: BinanceAccountType,
+    key: Optional[str] = None,
+    secret: Optional[str] = None,
+    base_url: Optional[str] = None,
+    is_testnet: bool = False,
+    is_us: bool = False,
 ) -> BinanceHttpClient:
     """
     Cache and return a Binance HTTP client with the given key and secret.
@@ -51,18 +60,24 @@ def get_cached_binance_http_client(
 
     Parameters
     ----------
-    key : str, optional
-        The API key for the client.
-        If None then will source from the `BINANCE_API_KEY` env var.
-    secret : str, optional
-        The API secret for the client.
-        If None then will source from the `BINANCE_API_SECRET` env var.
     loop : asyncio.AbstractEventLoop
         The event loop for the client.
     clock : LiveClock
         The clock for the client.
     logger : Logger
         The logger for the client.
+    account_type : BinanceAccountType
+        The account type for the client.
+    key : str, optional
+        The API key for the client.
+    secret : str, optional
+        The API secret for the client.
+    base_url : str, optional
+        The base URL for the API endpoints.
+    is_testnet : bool, default False
+        If the client is connecting to the testnet API.
+    is_us : bool, default False
+        If the client is connecting to Binance US.
 
     Returns
     -------
@@ -71,8 +86,9 @@ def get_cached_binance_http_client(
     """
     global HTTP_CLIENTS
 
-    key = key or os.environ["BINANCE_API_KEY"]
-    secret = secret or os.environ["BINANCE_API_SECRET"]
+    key = key or _get_api_key(account_type, is_testnet)
+    secret = secret or _get_api_secret(account_type, is_testnet)
+    default_http_base_url = _get_http_base_url(account_type, is_testnet, is_us)
 
     client_key: str = "|".join((key, secret))
     if client_key not in HTTP_CLIENTS:
@@ -82,20 +98,23 @@ def get_cached_binance_http_client(
             logger=logger,
             key=key,
             secret=secret,
+            base_url=base_url or default_http_base_url,
         )
         HTTP_CLIENTS[client_key] = client
     return HTTP_CLIENTS[client_key]
 
 
 @lru_cache(1)
-def get_cached_binance_instrument_provider(
+def get_cached_binance_spot_instrument_provider(
     client: BinanceHttpClient,
     logger: Logger,
-) -> BinanceInstrumentProvider:
+    account_type: BinanceAccountType,
+    config: InstrumentProviderConfig,
+) -> BinanceSpotInstrumentProvider:
     """
-    Cache and return a BinanceInstrumentProvider.
+    Cache and return an instrument provider for the `Binance Spot/Margin` exchange.
 
-    If a cached provider already exists, then that cached provider will be returned.
+    If a cached provider already exists, then that provider will be returned.
 
     Parameters
     ----------
@@ -103,15 +122,57 @@ def get_cached_binance_instrument_provider(
         The client for the instrument provider.
     logger : Logger
         The logger for the instrument provider.
+    account_type : BinanceAccountType
+        The Binance account type for the instrument provider.
+    config : InstrumentProviderConfig
+        The configuration for the instrument provider.
 
     Returns
     -------
-    BinanceInstrumentProvider
+    BinanceSpotInstrumentProvider
 
     """
-    return BinanceInstrumentProvider(
+    return BinanceSpotInstrumentProvider(
         client=client,
         logger=logger,
+        account_type=account_type,
+        config=config,
+    )
+
+
+@lru_cache(1)
+def get_cached_binance_futures_instrument_provider(
+    client: BinanceHttpClient,
+    logger: Logger,
+    account_type: BinanceAccountType,
+    config: InstrumentProviderConfig,
+) -> BinanceFuturesInstrumentProvider:
+    """
+    Cache and return an instrument provider for the `Binance Futures` exchange.
+
+    If a cached provider already exists, then that provider will be returned.
+
+    Parameters
+    ----------
+    client : BinanceHttpClient
+        The client for the instrument provider.
+    logger : Logger
+        The logger for the instrument provider.
+    account_type : BinanceAccountType
+        The Binance account type for the instrument provider.
+    config : InstrumentProviderConfig
+        The configuration for the instrument provider.
+
+    Returns
+    -------
+    BinanceFuturesInstrumentProvider
+
+    """
+    return BinanceFuturesInstrumentProvider(
+        client=client,
+        logger=logger,
+        account_type=account_type,
+        config=config,
     )
 
 
@@ -124,12 +185,12 @@ class BinanceLiveDataClientFactory(LiveDataClientFactory):
     def create(
         loop: asyncio.AbstractEventLoop,
         name: str,
-        config: Dict[str, Any],
+        config: BinanceDataClientConfig,
         msgbus: MessageBus,
         cache: Cache,
         clock: LiveClock,
         logger: LiveLogger,
-    ) -> BinanceDataClient:
+    ) -> Union[BinanceSpotDataClient, BinanceFuturesDataClient]:
         """
         Create a new Binance data client.
 
@@ -139,8 +200,8 @@ class BinanceLiveDataClientFactory(LiveDataClientFactory):
             The event loop for the client.
         name : str
             The client name.
-        config : dict
-            The configuration dictionary.
+        config : BinanceDataClientConfig
+            The client configuration.
         msgbus : MessageBus
             The message bus for the client.
         cache : Cache
@@ -152,34 +213,79 @@ class BinanceLiveDataClientFactory(LiveDataClientFactory):
 
         Returns
         -------
-        BinanceDataClient
+        BinanceSpotDataClient or BinanceFuturesDataClient
+
+        Raises
+        ------
+        ValueError
+            If `config.account_type` is not a valid `BinanceAccountType`.
 
         """
-        client = get_cached_binance_http_client(
-            key=config.get("api_key"),
-            secret=config.get("api_secret"),
+        # Get HTTP client singleton
+        client: BinanceHttpClient = get_cached_binance_http_client(
             loop=loop,
             clock=clock,
             logger=logger,
+            account_type=config.account_type,
+            key=config.api_key,
+            secret=config.api_secret,
+            base_url=config.base_url_http,
+            is_testnet=config.testnet,
+            is_us=config.us,
         )
 
-        # Get instrument provider singleton
-        provider = get_cached_binance_instrument_provider(client=client, logger=logger)
-
-        # Create client
-        data_client = BinanceDataClient(
-            loop=loop,
-            client=client,
-            msgbus=msgbus,
-            cache=cache,
-            clock=clock,
-            logger=logger,
-            instrument_provider=provider,
+        default_base_url_ws: str = _get_ws_base_url(
+            account_type=config.account_type,
+            is_testnet=config.testnet,
+            is_us=config.us,
         )
-        return data_client
+
+        provider: Union[BinanceSpotInstrumentProvider, BinanceFuturesInstrumentProvider]
+        if config.account_type.is_spot or config.account_type.is_margin:
+            # Get instrument provider singleton
+            provider = get_cached_binance_spot_instrument_provider(
+                client=client,
+                logger=logger,
+                account_type=config.account_type,
+                config=config.instrument_provider,
+            )
+
+            # Create client
+            return BinanceSpotDataClient(
+                loop=loop,
+                client=client,
+                msgbus=msgbus,
+                cache=cache,
+                clock=clock,
+                logger=logger,
+                instrument_provider=provider,
+                account_type=config.account_type,
+                base_url_ws=config.base_url_ws or default_base_url_ws,
+            )
+        else:
+            # Get instrument provider singleton
+            provider = get_cached_binance_futures_instrument_provider(
+                client=client,
+                logger=logger,
+                account_type=config.account_type,
+                config=config.instrument_provider,
+            )
+
+            # Create client
+            return BinanceFuturesDataClient(
+                loop=loop,
+                client=client,
+                msgbus=msgbus,
+                cache=cache,
+                clock=clock,
+                logger=logger,
+                instrument_provider=provider,
+                account_type=config.account_type,
+                base_url_ws=config.base_url_ws or default_base_url_ws,
+            )
 
 
-class BinanceLiveExecutionClientFactory(LiveExecutionClientFactory):
+class BinanceLiveExecClientFactory(LiveExecClientFactory):
     """
     Provides a `Binance` live execution client factory.
     """
@@ -188,12 +294,12 @@ class BinanceLiveExecutionClientFactory(LiveExecutionClientFactory):
     def create(
         loop: asyncio.AbstractEventLoop,
         name: str,
-        config: Dict[str, Any],
+        config: BinanceExecClientConfig,
         msgbus: MessageBus,
         cache: Cache,
         clock: LiveClock,
         logger: LiveLogger,
-    ) -> BinanceSpotExecutionClient:
+    ) -> Union[BinanceSpotExecutionClient, BinanceFuturesExecutionClient]:
         """
         Create a new Binance execution client.
 
@@ -203,7 +309,7 @@ class BinanceLiveExecutionClientFactory(LiveExecutionClientFactory):
             The event loop for the client.
         name : str
             The client name.
-        config : dict[str, object]
+        config : BinanceExecClientConfig
             The configuration for the client.
         msgbus : MessageBus
             The message bus for the client.
@@ -216,35 +322,149 @@ class BinanceLiveExecutionClientFactory(LiveExecutionClientFactory):
 
         Returns
         -------
-        BinanceSpotExecutionClient
+        BinanceExecutionClient
+
+        Raises
+        ------
+        ValueError
+            If `config.account_type` is not a valid `BinanceAccountType`.
 
         """
-        client = get_cached_binance_http_client(
-            key=config.get("api_key"),
-            secret=config.get("api_secret"),
+        # Get HTTP client singleton
+        client: BinanceHttpClient = get_cached_binance_http_client(
             loop=loop,
             clock=clock,
             logger=logger,
+            account_type=config.account_type,
+            key=config.api_key,
+            secret=config.api_secret,
+            base_url=config.base_url_http,
+            is_testnet=config.testnet,
+            is_us=config.us,
         )
 
-        # Get instrument provider singleton
-        provider = get_cached_binance_instrument_provider(client=client, logger=logger)
-
-        # Get account ID env variable or set default
-        account_id_env_var = os.getenv(config.get("account_id", ""), "001")
-
-        # Set account ID
-        account_id = AccountId(BINANCE_VENUE.value, account_id_env_var)
-
-        # Create client
-        exec_client = BinanceSpotExecutionClient(
-            loop=loop,
-            client=client,
-            account_id=account_id,
-            msgbus=msgbus,
-            cache=cache,
-            clock=clock,
-            logger=logger,
-            instrument_provider=provider,
+        default_base_url_ws: str = _get_ws_base_url(
+            account_type=config.account_type,
+            is_testnet=config.testnet,
+            is_us=config.us,
         )
-        return exec_client
+
+        provider: Union[BinanceSpotInstrumentProvider, BinanceFuturesInstrumentProvider]
+        if config.account_type.is_spot or config.account_type.is_margin:
+            # Get instrument provider singleton
+            provider = get_cached_binance_spot_instrument_provider(
+                client=client,
+                logger=logger,
+                account_type=config.account_type,
+                config=config.instrument_provider,
+            )
+
+            # Create client
+            return BinanceSpotExecutionClient(
+                loop=loop,
+                client=client,
+                msgbus=msgbus,
+                cache=cache,
+                clock=clock,
+                logger=logger,
+                instrument_provider=provider,
+                account_type=config.account_type,
+                base_url_ws=config.base_url_ws or default_base_url_ws,
+            )
+        else:
+            # Get instrument provider singleton
+            provider = get_cached_binance_futures_instrument_provider(
+                client=client,
+                logger=logger,
+                account_type=config.account_type,
+                config=config.instrument_provider,
+            )
+
+            # Create client
+            return BinanceFuturesExecutionClient(
+                loop=loop,
+                client=client,
+                msgbus=msgbus,
+                cache=cache,
+                clock=clock,
+                logger=logger,
+                instrument_provider=provider,
+                account_type=config.account_type,
+                base_url_ws=config.base_url_ws or default_base_url_ws,
+            )
+
+
+def _get_api_key(account_type: BinanceAccountType, is_testnet: bool) -> str:
+    if is_testnet:
+        if account_type.is_spot or account_type.is_margin:
+            return os.environ["BINANCE_TESTNET_API_KEY"]
+        else:
+            return os.environ["BINANCE_FUTURES_TESTNET_API_KEY"]
+
+    if account_type.is_spot or account_type.is_margin:
+        return os.environ["BINANCE_API_KEY"]
+    else:
+        return os.environ["BINANCE_FUTURES_API_KEY"]
+
+
+def _get_api_secret(account_type: BinanceAccountType, is_testnet: bool) -> str:
+    if is_testnet:
+        if account_type.is_spot or account_type.is_margin:
+            return os.environ["BINANCE_TESTNET_API_SECRET"]
+        else:
+            return os.environ["BINANCE_FUTURES_TESTNET_API_SECRET"]
+
+    if account_type.is_spot or account_type.is_margin:
+        return os.environ["BINANCE_API_SECRET"]
+    else:
+        return os.environ["BINANCE_FUTURES_API_SECRET"]
+
+
+def _get_http_base_url(account_type: BinanceAccountType, is_testnet: bool, is_us: bool) -> str:
+    # Testnet base URLs
+    if is_testnet:
+        if account_type in (BinanceAccountType.SPOT, BinanceAccountType.MARGIN):
+            return "https://testnet.binance.vision"
+        elif account_type == BinanceAccountType.FUTURES_USDT:
+            return "https://testnet.binancefuture.com"
+        elif account_type == BinanceAccountType.FUTURES_COIN:
+            return "https://testnet.binancefuture.com"
+        else:  # pragma: no cover (design-time error)
+            raise RuntimeError(f"invalid Binance account type, was {account_type}")
+
+    # Live base URLs
+    top_level_domain: str = "us" if is_us else "com"
+    if account_type == BinanceAccountType.SPOT:
+        return f"https://api.binance.{top_level_domain}"
+    elif account_type == BinanceAccountType.MARGIN:
+        return f"https://sapi.binance.{top_level_domain}"
+    elif account_type == BinanceAccountType.FUTURES_USDT:
+        return f"https://fapi.binance.{top_level_domain}"
+    elif account_type == BinanceAccountType.FUTURES_COIN:
+        return f"https://dapi.binance.{top_level_domain}"
+    else:  # pragma: no cover (design-time error)
+        raise RuntimeError(f"invalid Binance account type, was {account_type}")
+
+
+def _get_ws_base_url(account_type: BinanceAccountType, is_testnet: bool, is_us: bool) -> str:
+    # Testnet base URLs
+    if is_testnet:
+        if account_type in (BinanceAccountType.SPOT, BinanceAccountType.MARGIN):
+            return "wss://testnet.binance.vision"
+        elif account_type == BinanceAccountType.FUTURES_USDT:
+            return "wss://stream.binancefuture.com"
+        elif account_type == BinanceAccountType.FUTURES_COIN:
+            raise ValueError("no testnet for COIN-M futures")
+        else:  # pragma: no cover (design-time error)
+            raise RuntimeError(f"invalid Binance account type, was {account_type}")
+
+    # Live base URLs
+    top_level_domain: str = "us" if is_us else "com"
+    if account_type in (BinanceAccountType.SPOT, BinanceAccountType.MARGIN):
+        return f"wss://stream.binance.{top_level_domain}:9443"
+    elif account_type == BinanceAccountType.FUTURES_USDT:
+        return f"wss://fstream.binance.{top_level_domain}"
+    elif account_type == BinanceAccountType.FUTURES_COIN:
+        return f"wss://dstream.binance.{top_level_domain}"
+    else:  # pragma: no cover (design-time error)
+        raise RuntimeError(f"invalid Binance account type, was {account_type}")

@@ -21,12 +21,12 @@ from nautilus_trader.backtest.data.providers import TestInstrumentProvider
 from nautilus_trader.common.clock import LiveClock
 from nautilus_trader.common.factories import OrderFactory
 from nautilus_trader.common.logging import Logger
-from nautilus_trader.common.uuid import UUIDFactory
+from nautilus_trader.config import LiveRiskEngineConfig
+from nautilus_trader.core.uuid import UUID4
+from nautilus_trader.execution.messages import SubmitOrder
 from nautilus_trader.live.data_engine import LiveDataEngine
 from nautilus_trader.live.execution_engine import LiveExecutionEngine
 from nautilus_trader.live.risk_engine import LiveRiskEngine
-from nautilus_trader.live.risk_engine import LiveRiskEngineConfig
-from nautilus_trader.model.commands.trading import SubmitOrder
 from nautilus_trader.model.currencies import USD
 from nautilus_trader.model.enums import AccountType
 from nautilus_trader.model.enums import OrderSide
@@ -37,9 +37,11 @@ from nautilus_trader.model.identifiers import Venue
 from nautilus_trader.model.objects import Quantity
 from nautilus_trader.msgbus.bus import MessageBus
 from nautilus_trader.portfolio.portfolio import Portfolio
-from nautilus_trader.trading.strategy import TradingStrategy
-from tests.test_kit.mocks import MockExecutionClient
-from tests.test_kit.stubs import TestStubs
+from nautilus_trader.trading.strategy import Strategy
+from tests.test_kit.mocks.exec_clients import MockExecutionClient
+from tests.test_kit.stubs.component import TestComponentStubs
+from tests.test_kit.stubs.events import TestEventStubs
+from tests.test_kit.stubs.identifiers import TestIdStubs
 
 
 SIM = Venue("SIM")
@@ -54,11 +56,10 @@ class TestLiveRiskEngine:
         self.loop.set_debug(True)
 
         self.clock = LiveClock()
-        self.uuid_factory = UUIDFactory()
         self.logger = Logger(self.clock)
 
-        self.trader_id = TestStubs.trader_id()
-        self.account_id = TestStubs.account_id()
+        self.trader_id = TestIdStubs.trader_id()
+        self.account_id = TestIdStubs.account_id()
 
         self.order_factory = OrderFactory(
             trader_id=self.trader_id,
@@ -78,7 +79,7 @@ class TestLiveRiskEngine:
             logger=self.logger,
         )
 
-        self.cache = TestStubs.cache()
+        self.cache = TestComponentStubs.cache()
 
         self.portfolio = Portfolio(
             msgbus=self.msgbus,
@@ -114,7 +115,7 @@ class TestLiveRiskEngine:
 
         self.exec_client = MockExecutionClient(
             client_id=ClientId("SIM"),
-            account_id=TestStubs.account_id(),
+            venue=SIM,
             account_type=AccountType.MARGIN,
             base_currency=USD,
             msgbus=self.msgbus,
@@ -157,7 +158,7 @@ class TestLiveRiskEngine:
             config=LiveRiskEngineConfig(qsize=1),
         )
 
-        strategy = TradingStrategy()
+        strategy = Strategy()
         strategy.register(
             trader_id=self.trader_id,
             portfolio=self.portfolio,
@@ -177,8 +178,9 @@ class TestLiveRiskEngine:
             self.trader_id,
             strategy.id,
             None,
+            True,
             order,
-            self.uuid_factory.generate(),
+            UUID4(),
             self.clock.timestamp_ns(),
         )
 
@@ -205,7 +207,7 @@ class TestLiveRiskEngine:
             config=LiveRiskEngineConfig(qsize=1),
         )
 
-        strategy = TradingStrategy()
+        strategy = Strategy()
         strategy.register(
             trader_id=self.trader_id,
             portfolio=self.portfolio,
@@ -225,12 +227,13 @@ class TestLiveRiskEngine:
             self.trader_id,
             strategy.id,
             None,
+            True,
             order,
-            self.uuid_factory.generate(),
+            UUID4(),
             self.clock.timestamp_ns(),
         )
 
-        event = TestStubs.event_order_submitted(order)
+        event = TestEventStubs.order_submitted(order)
 
         # Act
         self.risk_engine.execute(submit_order)
@@ -276,7 +279,7 @@ class TestLiveRiskEngine:
         # Arrange
         self.risk_engine.start()
 
-        strategy = TradingStrategy()
+        strategy = Strategy()
         strategy.register(
             trader_id=self.trader_id,
             portfolio=self.portfolio,
@@ -296,8 +299,9 @@ class TestLiveRiskEngine:
             self.trader_id,
             strategy.id,
             None,
+            True,
             order,
-            self.uuid_factory.generate(),
+            UUID4(),
             self.clock.timestamp_ns(),
         )
 
@@ -318,7 +322,7 @@ class TestLiveRiskEngine:
         # Arrange
         self.risk_engine.start()
 
-        strategy = TradingStrategy()
+        strategy = Strategy()
         strategy.register(
             trader_id=self.trader_id,
             portfolio=self.portfolio,
@@ -334,7 +338,7 @@ class TestLiveRiskEngine:
             Quantity.from_int(100000),
         )
 
-        event = TestStubs.event_order_submitted(order)
+        event = TestEventStubs.order_submitted(order)
 
         # Act
         self.risk_engine.process(event)

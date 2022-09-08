@@ -13,9 +13,12 @@
 #  limitations under the License.
 # -------------------------------------------------------------------------------------------------
 
-import orjson
+import decimal
+import json
 
-from libc.stdint cimport int64_t
+import msgspec
+
+from libc.stdint cimport uint64_t
 
 from nautilus_trader.common.c_enums.component_state cimport ComponentState
 from nautilus_trader.common.c_enums.component_state cimport ComponentStateParser
@@ -24,8 +27,6 @@ from nautilus_trader.core.message cimport Event
 from nautilus_trader.core.uuid cimport UUID4
 from nautilus_trader.model.identifiers cimport ComponentId
 from nautilus_trader.model.identifiers cimport TraderId
-
-from nautilus_trader.serialization.json.default import Default
 
 
 cdef class ComponentStateChanged(Event):
@@ -44,9 +45,9 @@ cdef class ComponentStateChanged(Event):
         The component state.
     event_id : UUID4
         The event ID.
-    ts_event : int64
+    ts_event : uint64_t
         The UNIX timestamp (nanoseconds) when the component state event occurred.
-    ts_init : int64
+    ts_init : uint64_t
         The UNIX timestamp (nanoseconds) when the object was initialized.
     """
 
@@ -58,8 +59,8 @@ cdef class ComponentStateChanged(Event):
         ComponentState state,
         dict config not None,
         UUID4 event_id not None,
-        int64_t ts_event,
-        int64_t ts_init,
+        uint64_t ts_event,
+        uint64_t ts_init,
     ):
         super().__init__(event_id, ts_event, ts_init)
 
@@ -72,23 +73,23 @@ cdef class ComponentStateChanged(Event):
     def __str__(self) -> str:
         return (
             f"{type(self).__name__}("
-            f"trader_id={self.trader_id.value}, "
-            f"component_id={self.component_id}, "
+            f"trader_id={self.trader_id.to_str()}, "
+            f"component_id={self.component_id.to_str()}, "
             f"component_type={self.component_type}, "
             f"state={ComponentStateParser.to_str(self.state)}, "
             f"config={self.config}, "
-            f"event_id={self.id})"
+            f"event_id={self.id.to_str()})"
         )
 
     def __repr__(self) -> str:
         return (
             f"{type(self).__name__}("
-            f"trader_id={self.trader_id.value}, "
-            f"component_id={self.component_id}, "
+            f"trader_id={self.trader_id.to_str()}, "
+            f"component_id={self.component_id.to_str()}, "
             f"component_type={self.component_type}, "
             f"state={ComponentStateParser.to_str(self.state)}, "
             f"config={self.config}, "
-            f"event_id={self.id}, "
+            f"event_id={self.id.to_str()}, "
             f"ts_init={self.ts_init})"
         )
 
@@ -100,7 +101,7 @@ cdef class ComponentStateChanged(Event):
             component_id=ComponentId(values["component_id"]),
             component_type=values["component_type"],
             state=ComponentStateParser.from_str(values["state"]),
-            config=orjson.loads(values["config"]),
+            config=json.loads(values["config"]),
             event_id=UUID4(values["event_id"]),
             ts_event=values["ts_event"],
             ts_init=values["ts_init"],
@@ -109,27 +110,32 @@ cdef class ComponentStateChanged(Event):
     @staticmethod
     cdef dict to_dict_c(ComponentStateChanged obj):
         Condition.not_none(obj, "obj")
-        cdef bytes config_bytes = None
+        cdef:
+            bytes config_bytes
         try:
-            config_bytes = orjson.dumps(obj.config, default=Default.serialize)
-        except TypeError as ex:
-            if str(ex).startswith("Type is not JSON serializable"):
-                type_str = str(ex).split(":")[1].strip()
+            # TODO(cs): Temporary workaround
+            for k, v in obj.config.items():
+                if isinstance(v, decimal.Decimal):
+                    obj.config[k] = str(v)
+            config_bytes = msgspec.json.encode(obj.config)
+        except TypeError as e:
+            if str(e).startswith("Type is not JSON serializable"):
+                type_str = str(e).split(":")[1].strip()
                 raise TypeError(
-                    f"Cannot serialize config as {ex}. "
+                    f"Cannot serialize config as {e}. "
                     f"You can register a new serializer for `{type_str}` through "
                     f"`Default.register_serializer`.",
                 )
             else:
-                raise ex
+                raise e
         return {
             "type": "ComponentStateChanged",
-            "trader_id": obj.trader_id.value,
-            "component_id": obj.component_id.value,
+            "trader_id": obj.trader_id.to_str(),
+            "component_id": obj.component_id.to_str(),
             "component_type": obj.component_type,
             "state": ComponentStateParser.to_str(obj.state),
             "config": config_bytes,
-            "event_id": obj.id.value,
+            "event_id": obj.id.to_str(),
             "ts_event": obj.ts_event,
             "ts_init": obj.ts_init,
         }

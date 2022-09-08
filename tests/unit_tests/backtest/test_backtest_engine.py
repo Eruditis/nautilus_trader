@@ -13,9 +13,11 @@
 #  limitations under the License.
 # -------------------------------------------------------------------------------------------------
 
+import tempfile
 from decimal import Decimal
 
 import pandas as pd
+import pytest
 
 from nautilus_trader.backtest.data.providers import TestDataProvider
 from nautilus_trader.backtest.data.providers import TestInstrumentProvider
@@ -25,9 +27,11 @@ from nautilus_trader.backtest.data.wranglers import TradeTickDataWrangler
 from nautilus_trader.backtest.engine import BacktestEngine
 from nautilus_trader.backtest.engine import BacktestEngineConfig
 from nautilus_trader.backtest.models import FillModel
+from nautilus_trader.config.error import InvalidConfiguration
 from nautilus_trader.examples.strategies.ema_cross import EMACross
 from nautilus_trader.examples.strategies.ema_cross import EMACrossConfig
 from nautilus_trader.model.currencies import USD
+from nautilus_trader.model.currencies import USDT
 from nautilus_trader.model.data.bar import BarSpecification
 from nautilus_trader.model.data.bar import BarType
 from nautilus_trader.model.data.base import DataType
@@ -51,9 +55,12 @@ from nautilus_trader.model.orderbook.data import Order
 from nautilus_trader.model.orderbook.data import OrderBookDelta
 from nautilus_trader.model.orderbook.data import OrderBookDeltas
 from nautilus_trader.model.orderbook.data import OrderBookSnapshot
-from nautilus_trader.trading.strategy import TradingStrategy
+from nautilus_trader.persistence.catalog.parquet import ParquetDataCatalog
+from nautilus_trader.trading.strategy import Strategy
 from tests.test_kit.stubs import MyData
-from tests.test_kit.stubs import TestStubs
+from tests.test_kit.stubs.component import TestComponentStubs
+from tests.test_kit.stubs.config import TestConfigStubs
+from tests.test_kit.stubs.data import TestDataStubs
 
 
 ETHUSDT_BINANCE = TestInstrumentProvider.ethusdt_binance()
@@ -66,6 +73,14 @@ class TestBacktestEngine:
     def setup(self):
         # Fixture Setup
         self.engine = BacktestEngine()
+        self.engine.add_venue(
+            venue=Venue("SIM"),
+            oms_type=OMSType.HEDGING,
+            account_type=AccountType.MARGIN,
+            base_currency=USD,
+            starting_balances=[Money(1_000_000, USD)],
+            fill_model=FillModel(),
+        )
 
         self.usdjpy = TestInstrumentProvider.default_fx_ccy("USD/JPY")
 
@@ -77,16 +92,7 @@ class TestBacktestEngine:
             ask_data=provider.read_csv_bars("fxcm-usdjpy-m1-ask-2013.csv")[:2000],
         )
         self.engine.add_instrument(USDJPY_SIM)
-        self.engine.add_ticks(ticks)
-
-        self.engine.add_venue(
-            venue=Venue("SIM"),
-            oms_type=OMSType.HEDGING,
-            account_type=AccountType.MARGIN,
-            base_currency=USD,
-            starting_balances=[Money(1_000_000, USD)],
-            fill_model=FillModel(),
-        )
+        self.engine.add_data(ticks)
 
     def teardown(self):
         self.engine.reset()
@@ -127,7 +133,7 @@ class TestBacktestEngine:
 
     def test_run(self):
         # Arrange, Act
-        self.engine.add_strategy(TradingStrategy())
+        self.engine.add_strategy(Strategy())
         self.engine.run()
 
         # Assert
@@ -152,12 +158,47 @@ class TestBacktestEngine:
         assert len(report) == 1
         assert report.index[0] == start
 
+    def test_persistence_files_cleaned_up(self):
+        # Arrange
+        temp_dir = tempfile.mkdtemp()
+        catalog = ParquetDataCatalog(
+            path=str(temp_dir),
+            fs_protocol="file",
+        )
+        config = TestConfigStubs.backtest_engine_config(persist=True, catalog=catalog)
+        engine = TestComponentStubs.backtest_engine(
+            config=config,
+            instrument=self.usdjpy,
+            ticks=TestDataStubs.quote_ticks_usdjpy(),
+        )
+        engine.run()
+        engine.dispose()
+
+        assert all([f.closed for f in engine.kernel.writer._files.values()])
+
 
 class TestBacktestEngineData:
+    def setup(self):
+        # Fixture Setup
+        self.engine = BacktestEngine()
+        self.engine.add_venue(
+            venue=Venue("BINANCE"),
+            oms_type=OMSType.NETTING,
+            account_type=AccountType.MARGIN,
+            base_currency=USD,
+            starting_balances=[Money(1_000_000, USDT)],
+        )
+        self.engine.add_venue(
+            venue=Venue("SIM"),
+            oms_type=OMSType.HEDGING,
+            account_type=AccountType.MARGIN,
+            base_currency=USD,
+            starting_balances=[Money(1_000_000, USD)],
+            fill_model=FillModel(),
+        )
+
     def test_add_generic_data_adds_to_engine(self, capsys):
         # Arrange
-        engine = BacktestEngine()
-
         data_type = DataType(MyData, metadata={"news_wire": "hacks"})
 
         generic_data1 = [
@@ -184,29 +225,23 @@ class TestBacktestEngineData:
         ]
 
         # Act
-        engine.add_generic_data(ClientId("NEWS_CLIENT"), generic_data1)
-        engine.add_generic_data(ClientId("NEWS_CLIENT"), generic_data2)
+        self.engine.add_data(generic_data1, ClientId("NEWS_CLIENT"))
+        self.engine.add_data(generic_data2, ClientId("NEWS_CLIENT"))
 
         # Assert
-        log = "".join(capsys.readouterr())
-        assert "Added 4 MyData GenericData elements." in log
-        assert "Added 1 MyData GenericData element." in log
+        assert len(self.engine.data) == 5
 
-    def test_add_instrument_adds_to_engine(self, capsys):
+    def test_add_instrument_when_no_venue_raises_exception(self):
         # Arrange
         engine = BacktestEngine()
 
-        # Act
-        engine.add_instrument(ETHUSDT_BINANCE)
-
-        # Assert
-        log = "".join(capsys.readouterr())
-        assert "Added ETH/USDT.BINANCE Instrument." in log
+        # Act, Assert
+        with pytest.raises(InvalidConfiguration):
+            engine.add_instrument(ETHUSDT_BINANCE)
 
     def test_add_order_book_snapshots_adds_to_engine(self, capsys):
         # Arrange
-        engine = BacktestEngine()
-        engine.add_instrument(ETHUSDT_BINANCE)
+        self.engine.add_instrument(ETHUSDT_BINANCE)
 
         snapshot1 = OrderBookSnapshot(
             instrument_id=ETHUSDT_BINANCE.id,
@@ -227,17 +262,17 @@ class TestBacktestEngineData:
         )
 
         # Act
-        engine.add_order_book_data([snapshot2, snapshot1])  # <-- reverse order
+        self.engine.add_data([snapshot2, snapshot1])  # <-- reverse order
 
         # Assert
-        log = "".join(capsys.readouterr())
-        assert "Added 2 ETH/USDT.BINANCE OrderBookData elements." in log
+        assert len(self.engine.data) == 2
+        assert self.engine.data[0] == snapshot1
+        assert self.engine.data[1] == snapshot2
 
     def test_add_order_book_deltas_adds_to_engine(self, capsys):
         # Arrange
-        engine = BacktestEngine()
-        engine.add_instrument(AUDUSD_SIM)
-        engine.add_instrument(ETHUSDT_BINANCE)
+        self.engine.add_instrument(AUDUSD_SIM)
+        self.engine.add_instrument(ETHUSDT_BINANCE)
 
         deltas = [
             OrderBookDelta(
@@ -331,49 +366,42 @@ class TestBacktestEngineData:
         )
 
         # Act
-        engine.add_order_book_data([operations2, operations1])  # <-- not sorted
+        self.engine.add_data([operations2, operations1])  # <-- not sorted
 
         # Assert
-        log = "".join(capsys.readouterr())
-        assert "Added 2 ETH/USDT.BINANCE OrderBookData elements." in log
+        assert len(self.engine.data) == 2
+        assert self.engine.data[0] == operations1
+        assert self.engine.data[1] == operations2
 
     def test_add_quote_ticks_adds_to_engine(self, capsys):
-        # Arrange
-        engine = BacktestEngine()
-
-        # Setup data
-        engine.add_instrument(AUDUSD_SIM)
+        # Arrange, Setup data
+        self.engine.add_instrument(AUDUSD_SIM)
         wrangler = QuoteTickDataWrangler(AUDUSD_SIM)
         provider = TestDataProvider()
         ticks = wrangler.process(provider.read_csv_ticks("truefx-audusd-ticks.csv"))
 
         # Act
-        engine.add_ticks(ticks)
+        self.engine.add_data(ticks)
 
         # Assert
-        log = "".join(capsys.readouterr())
-        assert "Added 100,000 AUD/USD.SIM QuoteTick elements." in log
+        assert len(self.engine.data) == 100000
 
     def test_add_trade_ticks_adds_to_engine(self, capsys):
         # Arrange
-        engine = BacktestEngine()
-        engine.add_instrument(ETHUSDT_BINANCE)
+        self.engine.add_instrument(ETHUSDT_BINANCE)
 
         wrangler = TradeTickDataWrangler(ETHUSDT_BINANCE)
         provider = TestDataProvider()
         ticks = wrangler.process(provider.read_csv_ticks("binance-ethusdt-trades.csv"))
 
         # Act
-        engine.add_ticks(ticks)
+        self.engine.add_data(ticks)
 
         # Assert
-        log = "".join(capsys.readouterr())
-        assert "Added 69,806 ETH/USDT.BINANCE TradeTick elements." in log
+        assert len(self.engine.data) == 69806
 
     def test_add_bars_adds_to_engine(self, capsys):
         # Arrange
-        engine = BacktestEngine()
-
         bar_spec = BarSpecification(
             step=1,
             aggregation=BarAggregation.MINUTE,
@@ -394,18 +422,14 @@ class TestBacktestEngineData:
         bars = wrangler.process(provider.read_csv_bars("fxcm-usdjpy-m1-bid-2013.csv")[:2000])
 
         # Act
-        engine.add_instrument(USDJPY_SIM)
-        engine.add_bars(data=bars)
+        self.engine.add_instrument(USDJPY_SIM)
+        self.engine.add_data(data=bars)
 
         # Assert
-        log = "".join(capsys.readouterr())
-        assert "Added USD/JPY.SIM Instrument." in log
-        assert "Added 2,000 USD/JPY.SIM-1-MINUTE-BID-EXTERNAL Bar elements." in log
+        assert len(self.engine.data) == 2000
 
     def test_add_instrument_status_to_engine(self, capsys):
         # Arrange
-        engine = BacktestEngine()
-
         data = [
             InstrumentStatusUpdate(
                 instrument_id=USDJPY_SIM.id,
@@ -422,13 +446,12 @@ class TestBacktestEngineData:
         ]
 
         # Act
-        engine.add_instrument(USDJPY_SIM)
-        engine.add_data(data=data)
+        self.engine.add_instrument(USDJPY_SIM)
+        self.engine.add_data(data=data)
 
         # Assert
-        log = "".join(capsys.readouterr())
-        assert "Added USD/JPY.SIM Instrument." in log
-        assert "Added 2 USD/JPY.SIM InstrumentStatusUpdate elements." in log
+        assert len(self.engine.data) == 2
+        assert self.engine.data == data
 
 
 class TestBacktestWithAddedBars:
@@ -441,16 +464,25 @@ class TestBacktestWithAddedBars:
         self.engine = BacktestEngine(config=config)
         self.venue = Venue("SIM")
 
+        # Setup venue
+        self.engine.add_venue(
+            venue=self.venue,
+            oms_type=OMSType.HEDGING,
+            account_type=AccountType.MARGIN,
+            base_currency=USD,
+            starting_balances=[Money(1_000_000, USD)],
+        )
+
         # Setup data
         bid_bar_type = BarType(
             instrument_id=GBPUSD_SIM.id,
-            bar_spec=TestStubs.bar_spec_1min_bid(),
+            bar_spec=TestDataStubs.bar_spec_1min_bid(),
             aggregation_source=AggregationSource.EXTERNAL,  # <-- important
         )
 
         ask_bar_type = BarType(
             instrument_id=GBPUSD_SIM.id,
-            bar_spec=TestStubs.bar_spec_1min_ask(),
+            bar_spec=TestDataStubs.bar_spec_1min_ask(),
             aggregation_source=AggregationSource.EXTERNAL,  # <-- important
         )
 
@@ -468,26 +500,10 @@ class TestBacktestWithAddedBars:
         bid_bars = bid_wrangler.process(provider.read_csv_bars("fxcm-gbpusd-m1-bid-2012.csv"))
         ask_bars = ask_wrangler.process(provider.read_csv_bars("fxcm-gbpusd-m1-ask-2012.csv"))
 
+        # Add data
         self.engine.add_instrument(GBPUSD_SIM)
-        self.engine.add_bars(bid_bars)
-        self.engine.add_bars(ask_bars)
-
-        # Setup data
-        wrangler = QuoteTickDataWrangler(GBPUSD_SIM)
-        ticks = wrangler.process_bar_data(
-            bid_data=provider.read_csv_bars("fxcm-gbpusd-m1-bid-2012.csv"),
-            ask_data=provider.read_csv_bars("fxcm-gbpusd-m1-ask-2012.csv"),
-        )
-        self.engine.add_instrument(GBPUSD_SIM)
-        self.engine.add_ticks(ticks)
-
-        self.engine.add_venue(
-            venue=self.venue,
-            oms_type=OMSType.HEDGING,
-            account_type=AccountType.MARGIN,
-            base_currency=USD,
-            starting_balances=[Money(1_000_000, USD)],
-        )
+        self.engine.add_data(bid_bars)
+        self.engine.add_data(ask_bars)
 
     def teardown(self):
         self.engine.dispose()
@@ -496,7 +512,7 @@ class TestBacktestWithAddedBars:
         # Arrange
         bar_type = BarType(
             instrument_id=GBPUSD_SIM.id,
-            bar_spec=TestStubs.bar_spec_1min_bid(),
+            bar_spec=TestDataStubs.bar_spec_1min_bid(),
             aggregation_source=AggregationSource.EXTERNAL,  # <-- important
         )
         config = EMACrossConfig(
@@ -514,18 +530,20 @@ class TestBacktestWithAddedBars:
 
         # Assert
         assert strategy.fast_ema.count == 30117
-        assert self.engine.iteration == 180702
-        assert self.engine.portfolio.account(self.venue).balance_total(USD) == Money(977151.62, USD)
+        assert self.engine.iteration == 60234
+        assert self.engine.portfolio.account(self.venue).balance_total(USD) == Money(
+            1011166.89, USD
+        )
 
     def test_dump_pickled_data(self):
         # Arrange, # Act, # Assert
-        assert len(self.engine.dump_pickled_data()) == 34_700_594
+        assert len(self.engine.dump_pickled_data()) == 5181010
 
     def test_load_pickled_data(self):
         # Arrange
         bar_type = BarType(
             instrument_id=GBPUSD_SIM.id,
-            bar_spec=TestStubs.bar_spec_1min_bid(),
+            bar_spec=TestDataStubs.bar_spec_1min_bid(),
             aggregation_source=AggregationSource.EXTERNAL,  # <-- important
         )
         config = EMACrossConfig(
@@ -546,5 +564,7 @@ class TestBacktestWithAddedBars:
 
         # Assert
         assert strategy.fast_ema.count == 30117
-        assert self.engine.iteration == 180702
-        assert self.engine.portfolio.account(self.venue).balance_total(USD) == Money(977151.62, USD)
+        assert self.engine.iteration == 60234
+        assert self.engine.portfolio.account(self.venue).balance_total(USD) == Money(
+            1011166.89, USD
+        )

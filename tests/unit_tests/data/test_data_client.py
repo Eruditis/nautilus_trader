@@ -16,7 +16,8 @@
 from nautilus_trader.backtest.data.providers import TestInstrumentProvider
 from nautilus_trader.common.clock import TestClock
 from nautilus_trader.common.logging import Logger
-from nautilus_trader.common.uuid import UUIDFactory
+from nautilus_trader.core.data import Data
+from nautilus_trader.core.uuid import UUID4
 from nautilus_trader.data.client import DataClient
 from nautilus_trader.data.client import MarketDataClient
 from nautilus_trader.data.engine import DataEngine
@@ -32,7 +33,9 @@ from nautilus_trader.msgbus.bus import MessageBus
 from nautilus_trader.portfolio.portfolio import Portfolio
 from nautilus_trader.trading.filters import NewsEvent
 from nautilus_trader.trading.filters import NewsImpact
-from tests.test_kit.stubs import TestStubs
+from tests.test_kit.stubs.component import TestComponentStubs
+from tests.test_kit.stubs.data import TestDataStubs
+from tests.test_kit.stubs.identifiers import TestIdStubs
 
 
 SIM = Venue("SIM")
@@ -44,10 +47,11 @@ class TestDataClient:
     def setup(self):
         # Fixture Setup
         self.clock = TestClock()
-        self.uuid_factory = UUIDFactory()
         self.logger = Logger(self.clock)
+        self.sink = []
+        self.logger.register_sink(self.sink.append)
 
-        self.trader_id = TestStubs.trader_id()
+        self.trader_id = TestIdStubs.trader_id()
 
         self.msgbus = MessageBus(
             trader_id=self.trader_id,
@@ -55,7 +59,7 @@ class TestDataClient:
             logger=self.logger,
         )
 
-        self.cache = TestStubs.cache()
+        self.cache = TestComponentStubs.cache()
 
         self.portfolio = Portfolio(
             msgbus=self.msgbus,
@@ -75,11 +79,54 @@ class TestDataClient:
 
         self.client = DataClient(
             client_id=ClientId("TEST_PROVIDER"),
+            venue=self.venue,
             msgbus=self.msgbus,
             cache=self.cache,
             clock=self.clock,
             logger=self.logger,
         )
+
+    def test_subscribe_when_not_implemented_logs_error(self):
+        # Arrange
+        data_type = DataType(Data, {"Type": "MyData"})
+
+        # Act
+        self.client.subscribe(data_type)
+
+        # Assert
+        assert self.sink[-1]["level"] == "ERR"
+        assert (
+            self.sink[-1]["msg"]
+            == "Cannot subscribe to Data{'Type': 'MyData'}: not implemented. You can implement by overriding the `subscribe` method for this client."  # noqa
+        )  # noqa
+
+    def test_unsubscribe_when_not_implemented_logs_error(self):
+        # Arrange
+        data_type = DataType(Data, {"Type": "MyData"})
+
+        # Act
+        self.client.subscribe(data_type)
+
+        # Assert
+        assert self.sink[-1]["level"] == "ERR"
+        assert (
+            self.sink[-1]["msg"]
+            == "Cannot subscribe to Data{'Type': 'MyData'}: not implemented. You can implement by overriding the `subscribe` method for this client."  # noqa
+        )  # noqa
+
+    def test_request_when_not_implemented_logs_error(self):
+        # Arrange
+        data_type = DataType(Data, {"Type": "MyData"})
+
+        # Act
+        self.client.request(data_type, UUID4())
+
+        # Assert
+        assert self.sink[-1]["level"] == "ERR"
+        assert (
+            self.sink[-1]["msg"]
+            == "Cannot request Data{'Type': 'MyData'}: not implemented. You can implement by overriding the `request` method for this client."  # noqa
+        )  # noqa
 
     def test_handle_data_sends_to_data_engine(self):
         # Arrange
@@ -111,7 +158,7 @@ class TestDataClient:
         )
 
         # Act
-        self.client._handle_data_response_py(data_type, data, self.uuid_factory.generate())
+        self.client._handle_data_response_py(data_type, data, UUID4())
 
         # Assert
         assert self.data_engine.response_count == 1
@@ -121,10 +168,9 @@ class TestMarketDataClient:
     def setup(self):
         # Fixture Setup
         self.clock = TestClock()
-        self.uuid_factory = UUIDFactory()
         self.logger = Logger(self.clock)
 
-        self.trader_id = TestStubs.trader_id()
+        self.trader_id = TestIdStubs.trader_id()
 
         self.msgbus = MessageBus(
             trader_id=self.trader_id,
@@ -132,7 +178,7 @@ class TestMarketDataClient:
             logger=self.logger,
         )
 
-        self.cache = TestStubs.cache()
+        self.cache = TestComponentStubs.cache()
 
         self.portfolio = Portfolio(
             msgbus=self.msgbus,
@@ -152,6 +198,7 @@ class TestMarketDataClient:
 
         self.client = MarketDataClient(
             client_id=ClientId(self.venue.value),
+            venue=self.venue,
             msgbus=self.msgbus,
             cache=self.cache,
             clock=self.clock,
@@ -200,7 +247,7 @@ class TestMarketDataClient:
 
     def test_handle_ticker_sends_to_data_engine(self):
         # Arrange
-        tick = TestStubs.ticker()
+        tick = TestDataStubs.ticker()
 
         # Act
         self.client._handle_data_py(tick)
@@ -210,7 +257,7 @@ class TestMarketDataClient:
 
     def test_handle_quote_tick_sends_to_data_engine(self):
         # Arrange
-        tick = TestStubs.quote_tick_5decimal()
+        tick = TestDataStubs.quote_tick_5decimal()
 
         # Act
         self.client._handle_data_py(tick)
@@ -220,7 +267,7 @@ class TestMarketDataClient:
 
     def test_handle_trade_tick_sends_to_data_engine(self):
         # Arrange
-        tick = TestStubs.trade_tick_5decimal()
+        tick = TestDataStubs.trade_tick_5decimal()
 
         # Act
         self.client._handle_data_py(tick)
@@ -230,7 +277,7 @@ class TestMarketDataClient:
 
     def test_handle_bar_sends_to_data_engine(self):
         # Arrange
-        bar = TestStubs.bar_5decimal()
+        bar = TestDataStubs.bar_5decimal()
 
         # Act
         self.client._handle_data_py(bar)
@@ -240,14 +287,14 @@ class TestMarketDataClient:
 
     def test_handle_quote_ticks_sends_to_data_engine(self):
         # Arrange, Act
-        self.client._handle_quote_ticks_py(AUDUSD_SIM.id, [], self.uuid_factory.generate())
+        self.client._handle_quote_ticks_py(AUDUSD_SIM.id, [], UUID4())
 
         # Assert
         assert self.data_engine.response_count == 1
 
     def test_handle_trade_ticks_sends_to_data_engine(self):
         # Arrange, Act
-        self.client._handle_trade_ticks_py(AUDUSD_SIM.id, [], self.uuid_factory.generate())
+        self.client._handle_trade_ticks_py(AUDUSD_SIM.id, [], UUID4())
 
         # Assert
         assert self.data_engine.response_count == 1
@@ -255,10 +302,10 @@ class TestMarketDataClient:
     def test_handle_bars_sends_to_data_engine(self):
         # Arrange, Act
         self.client._handle_bars_py(
-            TestStubs.bartype_gbpusd_1sec_mid(),
+            TestDataStubs.bartype_gbpusd_1sec_mid(),
             [],
             None,
-            self.uuid_factory.generate(),
+            UUID4(),
         )
 
         # Assert

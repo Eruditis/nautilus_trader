@@ -13,9 +13,9 @@
 #  limitations under the License.
 # -------------------------------------------------------------------------------------------------
 
-import orjson
+import msgspec
 
-from libc.stdint cimport int64_t
+from libc.stdint cimport uint64_t
 
 from nautilus_trader.core.correctness cimport Condition
 from nautilus_trader.core.message cimport Event
@@ -25,6 +25,7 @@ from nautilus_trader.model.c_enums.account_type cimport AccountTypeParser
 from nautilus_trader.model.currency cimport Currency
 from nautilus_trader.model.identifiers cimport AccountId
 from nautilus_trader.model.objects cimport AccountBalance
+from nautilus_trader.model.objects cimport MarginBalance
 
 
 cdef class AccountState(Event):
@@ -42,15 +43,22 @@ cdef class AccountState(Event):
     reported : bool
         If the state is reported from the exchange (otherwise system calculated).
     balances : list[AccountBalance]
-        The account balances
+        The account balances.
+    margins : list[MarginBalance]
+        The margin balances (can be empty).
     info : dict [str, object]
         The additional implementation specific account information.
     event_id : UUID4
         The event ID.
-    ts_event : int64
+    ts_event : uint64_t
         The UNIX timestamp (nanoseconds) when the account state event occurred.
-    ts_init : int64
+    ts_init : uint64_t
         The UNIX timestamp (nanoseconds) when the object was initialized.
+
+    Raises
+    ------
+    ValueError
+        If `balances` is empty.
     """
 
     def __init__(
@@ -60,10 +68,11 @@ cdef class AccountState(Event):
         Currency base_currency,
         bint reported,
         list balances not None,
+        list margins not None,  # Can be empty
         dict info not None,
         UUID4 event_id not None,
-        int64_t ts_event,
-        int64_t ts_init,
+        uint64_t ts_event,
+        uint64_t ts_init,
     ):
         Condition.not_empty(balances, "balances")
         super().__init__(event_id, ts_event, ts_init)
@@ -72,18 +81,20 @@ cdef class AccountState(Event):
         self.account_type = account_type
         self.base_currency = base_currency
         self.balances = balances
+        self.margins = margins
         self.is_reported = reported
         self.info = info
 
     def __repr__(self) -> str:
         return (
             f"{type(self).__name__}("
-            f"account_id={self.account_id.value}, "
+            f"account_id={self.account_id.to_str()}, "
             f"account_type={AccountTypeParser.to_str(self.account_type)}, "
             f"base_currency={self.base_currency}, "
             f"is_reported={self.is_reported}, "
             f"balances=[{', '.join([str(b) for b in self.balances])}], "
-            f"event_id={self.id})"
+            f"margins=[{', '.join([str(m) for m in self.margins])}], "
+            f"event_id={self.id.to_str()})"
         )
 
     @staticmethod
@@ -91,12 +102,13 @@ cdef class AccountState(Event):
         Condition.not_none(values, "values")
         cdef str base_str = values["base_currency"]
         return AccountState(
-            account_id=AccountId.from_str_c(values["account_id"]),
+            account_id=AccountId(values["account_id"]),
             account_type=AccountTypeParser.from_str(values["account_type"]),
             base_currency=Currency.from_str_c(base_str) if base_str is not None else None,
             reported=values["reported"],
-            balances=[AccountBalance.from_dict(b) for b in orjson.loads(values["balances"])],
-            info=orjson.loads(values["info"]),
+            balances=[AccountBalance.from_dict(b) for b in msgspec.json.decode(values["balances"])],
+            margins=[MarginBalance.from_dict(m) for m in msgspec.json.decode(values["margins"])],
+            info=msgspec.json.decode(values["info"]),
             event_id=UUID4(values["event_id"]),
             ts_event=values["ts_event"],
             ts_init=values["ts_init"],
@@ -107,13 +119,14 @@ cdef class AccountState(Event):
         Condition.not_none(obj, "obj")
         return {
             "type": "AccountState",
-            "account_id": obj.account_id.value,
+            "account_id": obj.account_id.to_str(),
             "account_type": AccountTypeParser.to_str(obj.account_type),
             "base_currency": obj.base_currency.code if obj.base_currency else None,
-            "balances": orjson.dumps([b.to_dict() for b in obj.balances]),
+            "balances": msgspec.json.encode([b.to_dict() for b in obj.balances]),
+            "margins": msgspec.json.encode([m.to_dict() for m in obj.margins]),
             "reported": obj.is_reported,
-            "info": orjson.dumps(obj.info),
-            "event_id": obj.id.value,
+            "info": msgspec.json.encode(obj.info),
+            "event_id": obj.id.to_str(),
             "ts_event": obj.ts_event,
             "ts_init": obj.ts_init,
         }

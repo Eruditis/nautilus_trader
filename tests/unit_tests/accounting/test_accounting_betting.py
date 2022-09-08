@@ -13,8 +13,6 @@
 #  limitations under the License.
 # -------------------------------------------------------------------------------------------------
 
-from decimal import Decimal
-
 import pytest
 
 from nautilus_trader.accounting.accounts.betting import BettingAccount
@@ -36,13 +34,15 @@ from nautilus_trader.model.objects import Price
 from nautilus_trader.model.objects import Quantity
 from nautilus_trader.model.position import Position
 from tests.integration_tests.adapters.betfair.test_kit import BetfairTestStubs
-from tests.test_kit.stubs import TestStubs
+from tests.test_kit.stubs.events import TestEventStubs
+from tests.test_kit.stubs.execution import TestExecStubs
+from tests.test_kit.stubs.identifiers import TestIdStubs
 
 
 class TestBettingAccount:
     def setup(self):
         # Fixture Setup
-        self.trader_id = TestStubs.trader_id()
+        self.trader_id = TestIdStubs.trader_id()
         self.instrument = BetfairTestStubs.betting_instrument()
         self.order_factory = OrderFactory(
             trader_id=self.trader_id,
@@ -53,18 +53,18 @@ class TestBettingAccount:
     @staticmethod
     def _make_account_state(starting_balance: float):
         return AccountState(
-            account_id=AccountId("SIM", "001"),
+            account_id=AccountId("SIM-001"),
             account_type=AccountType.BETTING,
             base_currency=GBP,
             reported=True,
             balances=[
                 AccountBalance(
-                    GBP,
                     Money(starting_balance, GBP),
                     Money(0.00, GBP),
                     Money(starting_balance, GBP),
                 ),
             ],
+            margins=[],
             info={},  # No default currency set
             event_id=UUID4(),
             ts_event=0,
@@ -78,7 +78,7 @@ class TestBettingAccount:
             Quantity.from_int(volume),
         )
 
-        fill = TestStubs.event_order_filled(
+        fill = TestEventStubs.order_filled(
             order,
             instrument=self.instrument,
             position_id=PositionId(position_id),
@@ -89,12 +89,12 @@ class TestBettingAccount:
 
     def test_instantiated_accounts_basic_properties(self):
         # Arrange, Act
-        account = TestStubs.betting_account()
+        account = TestExecStubs.betting_account()
 
         # Assert
         assert account == account
         assert not account != account
-        assert account.id == AccountId("SIM", "000")
+        assert account.id == AccountId("SIM-000")
         assert str(account) == "BettingAccount(id=SIM-000, type=BETTING, base=GBP)"
         assert repr(account) == "BettingAccount(id=SIM-000, type=BETTING, base=GBP)"
         assert isinstance(hash(account), int)
@@ -102,18 +102,18 @@ class TestBettingAccount:
     def test_instantiate_single_asset_cash_account(self):
         # Arrange
         event = AccountState(
-            account_id=AccountId("SIM", "000"),
+            account_id=AccountId("SIM-000"),
             account_type=AccountType.BETTING,
             base_currency=GBP,
             reported=True,
             balances=[
                 AccountBalance(
-                    GBP,
                     Money(1_000_000, GBP),
                     Money(0, GBP),
                     Money(1_000_000, GBP),
                 ),
             ],
+            margins=[],
             info={},
             event_id=UUID4(),
             ts_event=0,
@@ -138,18 +138,18 @@ class TestBettingAccount:
     def test_apply_given_new_state_event_updates_correctly(self):
         # Arrange
         event1 = AccountState(
-            account_id=AccountId("SIM", "001"),
+            account_id=AccountId("SIM-001"),
             account_type=AccountType.BETTING,
             base_currency=None,  # Multi-currency
             reported=True,
             balances=[
                 AccountBalance(
-                    GBP,
                     Money(10.00000000, GBP),
                     Money(0.00000000, GBP),
                     Money(10.00000000, GBP),
                 ),
             ],
+            margins=[],
             info={},  # No default currency set
             event_id=UUID4(),
             ts_event=0,
@@ -160,18 +160,18 @@ class TestBettingAccount:
         account = BettingAccount(event1)
 
         event2 = AccountState(
-            account_id=AccountId("SIM", "001"),
+            account_id=AccountId("SIM-001"),
             account_type=AccountType.BETTING,
             base_currency=None,  # Multi-currency
             reported=True,
             balances=[
                 AccountBalance(
-                    GBP,
                     Money(9.00000000, GBP),
                     Money(0.50000000, GBP),
                     Money(8.50000000, GBP),
                 ),
             ],
+            margins=[],
             info={},  # No default currency set
             event_id=UUID4(),
             ts_event=0,
@@ -259,13 +259,13 @@ class TestBettingAccount:
         self,
     ):
         # Arrange
-        account = TestStubs.cash_account()
+        account = TestExecStubs.cash_account()
 
         # Act, Assert
         with pytest.raises(ValueError):
             account.calculate_commission(
                 instrument=self.instrument,
                 last_qty=Quantity.from_int(1),
-                last_px=Decimal("1"),
+                last_px=Price.from_str("1"),
                 liquidity_side=LiquiditySide.NONE,
             )

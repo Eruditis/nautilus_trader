@@ -24,13 +24,15 @@ from nautilus_trader.backtest.data.wranglers import QuoteTickDataWrangler
 from nautilus_trader.backtest.data.wranglers import TradeTickDataWrangler
 from nautilus_trader.common.clock import TestClock
 from nautilus_trader.model.enums import AggressorSide
+from nautilus_trader.model.identifiers import TradeId
 from nautilus_trader.model.objects import Price
 from nautilus_trader.model.objects import Quantity
 from tests.test_kit import PACKAGE_ROOT
-from tests.test_kit.stubs import TestStubs
+from tests.test_kit.stubs.data import TestDataStubs
+from tests.test_kit.stubs.identifiers import TestIdStubs
 
 
-AUDUSD_SIM = TestStubs.audusd_id()
+AUDUSD_SIM = TestIdStubs.audusd_id()
 
 
 class TestQuoteTickDataWrangler:
@@ -174,7 +176,7 @@ class TestTradeTickDataWrangler:
         assert ticks[0].price == Price.from_str("423.760")
         assert ticks[0].size == Quantity.from_str("2.67900")
         assert ticks[0].aggressor_side == AggressorSide.SELL
-        assert ticks[0].trade_id == "148568980"
+        assert ticks[0].trade_id == TradeId("148568980")
         assert ticks[0].ts_event == 1597399200223000064
         assert ticks[0].ts_init == 1597399200223000064
 
@@ -195,7 +197,7 @@ class TestTradeTickDataWrangler:
         assert ticks[0].price == Price.from_str("423.760")
         assert ticks[0].size == Quantity.from_str("2.67900")
         assert ticks[0].aggressor_side == AggressorSide.SELL
-        assert ticks[0].trade_id == "148568980"
+        assert ticks[0].trade_id == TradeId("148568980")
         assert ticks[0].ts_event == 1597399200223000064
         assert ticks[0].ts_init == 1597399200224000564  # <-- delta diff
 
@@ -204,7 +206,7 @@ class TestBarDataWrangler:
     def setup(self):
         # Fixture Setup
         instrument = TestInstrumentProvider.default_fx_ccy("GBP/USD")
-        bar_type = TestStubs.bartype_gbpusd_1min_bid()
+        bar_type = TestDataStubs.bartype_gbpusd_1min_bid()
         self.wrangler = BarDataWrangler(
             bar_type=bar_type,
             instrument=instrument,
@@ -249,7 +251,7 @@ class TestBarDataWranglerHeaderless:
     def setup(self):
         # Fixture Setup
         instrument = TestInstrumentProvider.adabtc_binance()
-        bar_type = TestStubs.bartype_adabtc_binance_1min_last()
+        bar_type = TestDataStubs.bartype_adabtc_binance_1min_last()
         self.wrangler = BarDataWrangler(
             bar_type=bar_type,
             instrument=instrument,
@@ -354,6 +356,6 @@ class TestTardisTradeDataWrangler:
         assert ticks[0].price == Price.from_str("9682.00")
         assert ticks[0].size == Quantity.from_str("0.132000")
         assert ticks[0].aggressor_side == AggressorSide.BUY
-        assert ticks[0].trade_id == "42377944"
+        assert ticks[0].trade_id == TradeId("42377944")
         assert ticks[0].ts_event == 1582329602418379008
         assert ticks[0].ts_init == 1582329602418379008

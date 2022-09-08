@@ -13,20 +13,28 @@
 #  limitations under the License.
 # -------------------------------------------------------------------------------------------------
 
+from typing import Optional
+
+from libc.stdint cimport uint64_t
+
 from nautilus_trader.cache.cache cimport Cache
 from nautilus_trader.common.clock cimport Clock
 from nautilus_trader.common.component cimport Component
 from nautilus_trader.common.logging cimport Logger
 from nautilus_trader.core.correctness cimport Condition
+from nautilus_trader.core.uuid cimport UUID4
+from nautilus_trader.execution.messages cimport CancelAllOrders
+from nautilus_trader.execution.messages cimport CancelOrder
+from nautilus_trader.execution.messages cimport ModifyOrder
+from nautilus_trader.execution.messages cimport SubmitOrder
+from nautilus_trader.execution.messages cimport SubmitOrderList
+from nautilus_trader.execution.reports cimport ExecutionMassStatus
+from nautilus_trader.execution.reports cimport OrderStatusReport
+from nautilus_trader.execution.reports cimport TradeReport
 from nautilus_trader.model.c_enums.account_type cimport AccountType
 from nautilus_trader.model.c_enums.liquidity_side cimport LiquiditySide
 from nautilus_trader.model.c_enums.order_side cimport OrderSide
 from nautilus_trader.model.c_enums.order_type cimport OrderType
-from nautilus_trader.model.commands.trading cimport CancelAllOrders
-from nautilus_trader.model.commands.trading cimport CancelOrder
-from nautilus_trader.model.commands.trading cimport ModifyOrder
-from nautilus_trader.model.commands.trading cimport SubmitOrder
-from nautilus_trader.model.commands.trading cimport SubmitOrderList
 from nautilus_trader.model.currency cimport Currency
 from nautilus_trader.model.events.account cimport AccountState
 from nautilus_trader.model.events.order cimport OrderAccepted
@@ -44,10 +52,10 @@ from nautilus_trader.model.events.order cimport OrderUpdated
 from nautilus_trader.model.identifiers cimport AccountId
 from nautilus_trader.model.identifiers cimport ClientId
 from nautilus_trader.model.identifiers cimport ClientOrderId
-from nautilus_trader.model.identifiers cimport ExecutionId
 from nautilus_trader.model.identifiers cimport InstrumentId
 from nautilus_trader.model.identifiers cimport PositionId
 from nautilus_trader.model.identifiers cimport StrategyId
+from nautilus_trader.model.identifiers cimport TradeId
 from nautilus_trader.model.identifiers cimport VenueOrderId
 from nautilus_trader.model.objects cimport Money
 from nautilus_trader.model.objects cimport Price
@@ -63,8 +71,10 @@ cdef class ExecutionClient(Component):
     ----------
     client_id : ClientId
         The client ID.
-    account_id : AccountId
-        The account ID for the client.
+    venue : Venue, optional
+        The client venue. If multi-venue then can be ``None``.
+    oms_type : OMSType
+        The venues order management system type.
     account_type : AccountType
         The account type for the client.
     base_currency : Currency, optional
@@ -83,7 +93,9 @@ cdef class ExecutionClient(Component):
     Raises
     ------
     ValueError
-        If `client_id` is not equal to `account_id.issuer`.
+        If `client_id` is not equal to `account_id.get_issuer()`.
+    ValueError
+        If `oms_type` is ``NONE`` value (must be defined).
 
     Warnings
     --------
@@ -93,34 +105,34 @@ cdef class ExecutionClient(Component):
     def __init__(
         self,
         ClientId client_id not None,
-        AccountId account_id not None,
+        Venue venue: Optional[Venue],
+        OMSType oms_type,
         AccountType account_type,
-        Currency base_currency,  # Can be None
+        Currency base_currency: Optional[Currency],
         MessageBus msgbus not None,
         Cache cache not None,
         Clock clock not None,
         Logger logger not None,
         dict config=None,
     ):
-        Condition.equal(client_id.value, account_id.issuer, "client_id.value", "account_id.issuer")
-
+        Condition.not_equal(oms_type, OMSType.NONE, "oms_type", "OMSType")
         if config is None:
             config = {}
         super().__init__(
             clock=clock,
             logger=logger,
             component_id=client_id,
-            component_name=config.get("name", f"ExecClient-{client_id.value}"),
+            component_name=config.get("name", f"ExecClient-{client_id}"),
             msgbus=msgbus,
             config=config,
         )
 
         self._cache = cache
-        self._account = None  # Initialized on connection
 
         self.trader_id = msgbus.trader_id
-        self.venue = Venue(client_id.value) if not config.get("routing") else None
-        self.account_id = account_id
+        self.venue = venue
+        self.oms_type = oms_type
+        self.account_id = None  # Initialized on connection
         self.account_type = account_type
         self.base_currency = base_currency
 
@@ -130,16 +142,14 @@ cdef class ExecutionClient(Component):
         return f"{type(self).__name__}-{self.id.value}"
 
     cpdef void _set_connected(self, bint value=True) except *:
-        """
-        Setter for pure Python implementations to change the readonly property.
-
-        Parameters
-        ----------
-        value : bool
-            The value to set for is_connected.
-
-        """
+        # Setter for pure Python implementations to change the readonly property
         self.is_connected = value
+
+    cpdef void _set_account_id(self, AccountId account_id) except *:
+        Condition.not_none(account_id, "account_id")
+        Condition.equal(self.id.to_str(), account_id.get_issuer(), "id.value", "account_id.get_issuer()")
+
+        self.account_id = account_id
 
     cpdef Account get_account(self):
         """
@@ -150,48 +160,108 @@ cdef class ExecutionClient(Component):
         Account or ``None``
 
         """
-        # Check account
-        if self._account is None:
-            account = self._cache.account_for_venue(self.venue)
-            if account is None:
-                self._log.error(
-                    "Cannot generate OrderFilled: "
-                    f"no account found for venue {self.venue}."
-                )
-                return
-            self._account = account
+        return self._cache.account(self.account_id)
 
-        return self._account
-
-# -- COMMAND HANDLERS ------------------------------------------------------------------------------
+# -- COMMAND HANDLERS -----------------------------------------------------------------------------
 
     cpdef void submit_order(self, SubmitOrder command) except *:
-        """Abstract method (implement in subclass)."""
-        raise NotImplementedError("method must be implemented in the subclass")  # pragma: no cover
+        """
+        Submit the order contained in the given command for execution.
+
+        Parameters
+        ----------
+        command : SubmitOrder
+            The command to execute.
+
+        """
+        self._log.error(  # pragma: no cover
+            f"Cannot execute command {command}: not implemented. "
+            f"You can implement by overriding the `submit_order` method for this client.",
+        )
+        raise NotImplementedError("method must be implemented in the subclass")
 
     cpdef void submit_order_list(self, SubmitOrderList command) except *:
-        """Abstract method (implement in subclass)."""
-        raise NotImplementedError("method must be implemented in the subclass")  # pragma: no cover
+        """
+        Submit the order list contained in the given command for execution.
+
+        Parameters
+        ----------
+        command : SubmitOrderList
+            The command to execute.
+
+        """
+        self._log.error(  # pragma: no cover
+            f"Cannot execute command {command}: not implemented. "
+            f"You can implement by overriding the `submit_order_list` method for this client.",
+        )
+        raise NotImplementedError("method must be implemented in the subclass")
 
     cpdef void modify_order(self, ModifyOrder command) except *:
-        """Abstract method (implement in subclass)."""
-        raise NotImplementedError("method must be implemented in the subclass")  # pragma: no cover
+        """
+        Modify the order with parameters contained in the command.
+
+        Parameters
+        ----------
+        command : ModifyOrder
+            The command to execute.
+
+        """
+        self._log.error(  # pragma: no cover
+            f"Cannot execute command {command}: not implemented. "
+            f"You can implement by overriding the `modify_order` method for this client.",
+        )
+        raise NotImplementedError("method must be implemented in the subclass")
 
     cpdef void cancel_order(self, CancelOrder command) except *:
-        """Abstract method (implement in subclass)."""
-        raise NotImplementedError("method must be implemented in the subclass")  # pragma: no cover
+        """
+        Cancel the order with the client order ID contained in the given command.
+
+        Parameters
+        ----------
+        command : CancelOrder
+            The command to execute.
+
+        """
+        self._log.error(  # pragma: no cover
+            f"Cannot execute command {command}: not implemented. "
+            f"You can implement by overriding the `cancel_order` method for this client.",
+        )
+        raise NotImplementedError("method must be implemented in the subclass")
 
     cpdef void cancel_all_orders(self, CancelAllOrders command) except *:
-        """Abstract method (implement in subclass)."""
-        raise NotImplementedError("method must be implemented in the subclass")  # pragma: no cover
+        """
+        Cancel all orders for the instrument ID contained in the given command.
 
-# -- EVENT HANDLERS --------------------------------------------------------------------------------
+        Parameters
+        ----------
+        command : CancelAllOrders
+            The command to execute.
+
+        """
+        self._log.error(  # pragma: no cover
+            f"Cannot execute command {command}: not implemented. "
+            f"You can implement by overriding the `cancel_all_orders` method for this client.",
+        )
+        raise NotImplementedError("method must be implemented in the subclass")
+
+    cpdef void sync_order_status(self, QueryOrder command) except *:
+        """
+        Request a reconciliation for the queried order which will generate an `OrderStatusReport`
+        """
+        self._log.error(  # pragma: no cover
+            f"Cannot execute command {command}: not implemented. "
+            f"You can implement by overriding the `sync_order_status` method for this client.",
+        )
+        raise NotImplementedError("method must be implemented in the subclass")
+
+# -- EVENT HANDLERS -------------------------------------------------------------------------------
 
     cpdef void generate_account_state(
         self,
         list balances,
+        list margins,
         bint reported,
-        int64_t ts_event,
+        uint64_t ts_event,
         dict info=None,
     ) except *:
         """
@@ -201,9 +271,11 @@ cdef class ExecutionClient(Component):
         ----------
         balances : list[AccountBalance]
             The account balances.
+        margins : list[MarginBalance]
+            The margin balances.
         reported : bool
             If the balances are reported directly from the exchange.
-        ts_event : int64
+        ts_event : uint64_t
             The UNIX timestamp (nanoseconds) when the account state event occurred.
         info : dict [str, object]
             The additional implementation specific account information.
@@ -216,8 +288,9 @@ cdef class ExecutionClient(Component):
             base_currency=self.base_currency,
             reported=reported,
             balances=balances,
+            margins=margins,
             info=info or {},
-            event_id=self._uuid_factory.generate(),
+            event_id=UUID4(),
             ts_event=ts_event,
             ts_init=self._clock.timestamp_ns(),
         )
@@ -229,7 +302,7 @@ cdef class ExecutionClient(Component):
         StrategyId strategy_id,
         InstrumentId instrument_id,
         ClientOrderId client_order_id,
-        int64_t ts_event,
+        uint64_t ts_event,
     ) except *:
         """
         Generate an `OrderSubmitted` event and send it to the `ExecutionEngine`.
@@ -242,7 +315,7 @@ cdef class ExecutionClient(Component):
             The instrument ID.
         client_order_id : ClientOrderId
             The client order ID.
-        ts_event : int64
+        ts_event : uint64_t
             The UNIX timestamp (nanoseconds) when the order submitted event occurred.
 
         """
@@ -253,7 +326,7 @@ cdef class ExecutionClient(Component):
             account_id=self.account_id,
             instrument_id=instrument_id,
             client_order_id=client_order_id,
-            event_id=self._uuid_factory.generate(),
+            event_id=UUID4(),
             ts_event=ts_event,
             ts_init=self._clock.timestamp_ns(),
         )
@@ -266,7 +339,7 @@ cdef class ExecutionClient(Component):
         InstrumentId instrument_id,
         ClientOrderId client_order_id,
         str reason,
-        int64_t ts_event,
+        uint64_t ts_event,
     ) except *:
         """
         Generate an `OrderRejected` event and send it to the `ExecutionEngine`.
@@ -281,7 +354,7 @@ cdef class ExecutionClient(Component):
             The client order ID.
         reason : datetime
             The order rejected reason.
-        ts_event : int64
+        ts_event : uint64_t
             The UNIX timestamp (nanoseconds) when the order rejected event occurred.
 
         """
@@ -293,7 +366,7 @@ cdef class ExecutionClient(Component):
             instrument_id=instrument_id,
             client_order_id=client_order_id,
             reason=reason,
-            event_id=self._uuid_factory.generate(),
+            event_id=UUID4(),
             ts_event=ts_event,
             ts_init=self._clock.timestamp_ns(),
         )
@@ -306,7 +379,7 @@ cdef class ExecutionClient(Component):
         InstrumentId instrument_id,
         ClientOrderId client_order_id,
         VenueOrderId venue_order_id,
-        int64_t ts_event,
+        uint64_t ts_event,
     ) except *:
         """
         Generate an `OrderAccepted` event and send it to the `ExecutionEngine`.
@@ -320,8 +393,8 @@ cdef class ExecutionClient(Component):
         client_order_id : ClientOrderId
             The client order ID.
         venue_order_id : VenueOrderId
-            The venue order ID.
-        ts_event : int64
+            The venue order ID (assigned by the venue).
+        ts_event : uint64_t
             The UNIX timestamp (nanoseconds) when the order accepted event occurred.
 
         """
@@ -333,7 +406,7 @@ cdef class ExecutionClient(Component):
             instrument_id=instrument_id,
             client_order_id=client_order_id,
             venue_order_id=venue_order_id,
-            event_id=self._uuid_factory.generate(),
+            event_id=UUID4(),
             ts_event=ts_event,
             ts_init=self._clock.timestamp_ns(),
         )
@@ -346,7 +419,7 @@ cdef class ExecutionClient(Component):
         InstrumentId instrument_id,
         ClientOrderId client_order_id,
         VenueOrderId venue_order_id,
-        int64_t ts_event,
+        uint64_t ts_event,
     ) except *:
         """
         Generate an `OrderPendingUpdate` event and send it to the `ExecutionEngine`.
@@ -360,8 +433,8 @@ cdef class ExecutionClient(Component):
         client_order_id : ClientOrderId
             The client order ID.
         venue_order_id : VenueOrderId
-            The venue order ID.
-        ts_event : datetime
+            The venue order ID (assigned by the venue).
+        ts_event : uint64_t
             The UNIX timestamp (nanoseconds) when the order pending update event occurred.
 
         """
@@ -373,7 +446,7 @@ cdef class ExecutionClient(Component):
             instrument_id=instrument_id,
             client_order_id=client_order_id,
             venue_order_id=venue_order_id,
-            event_id=self._uuid_factory.generate(),
+            event_id=UUID4(),
             ts_event=ts_event,
             ts_init=self._clock.timestamp_ns(),
         )
@@ -386,7 +459,7 @@ cdef class ExecutionClient(Component):
         InstrumentId instrument_id,
         ClientOrderId client_order_id,
         VenueOrderId venue_order_id,
-        int64_t ts_event,
+        uint64_t ts_event,
     ) except *:
         """
         Generate an `OrderPendingCancel` event and send it to the `ExecutionEngine`.
@@ -400,8 +473,8 @@ cdef class ExecutionClient(Component):
         client_order_id : ClientOrderId
             The client order ID.
         venue_order_id : VenueOrderId
-            The venue order ID.
-        ts_event : datetime
+            The venue order ID (assigned by the venue).
+        ts_event : uint64_t
             The UNIX timestamp (nanoseconds) when the order pending cancel event occurred.
 
         """
@@ -413,7 +486,7 @@ cdef class ExecutionClient(Component):
             instrument_id=instrument_id,
             client_order_id=client_order_id,
             venue_order_id=venue_order_id,
-            event_id=self._uuid_factory.generate(),
+            event_id=UUID4(),
             ts_event=ts_event,
             ts_init=self._clock.timestamp_ns(),
         )
@@ -427,7 +500,7 @@ cdef class ExecutionClient(Component):
         ClientOrderId client_order_id,
         VenueOrderId venue_order_id,
         str reason,
-        int64_t ts_event,
+        uint64_t ts_event,
     ) except *:
         """
         Generate an `OrderModifyRejected` event and send it to the `ExecutionEngine`.
@@ -441,10 +514,10 @@ cdef class ExecutionClient(Component):
         client_order_id : ClientOrderId
             The client order ID.
         venue_order_id : VenueOrderId
-            The venue order ID.
+            The venue order ID (assigned by the venue).
         reason : str
             The order update rejected reason.
-        ts_event : datetime
+        ts_event : uint64_t
             The UNIX timestamp (nanoseconds) when the order update rejection event occurred.
 
         """
@@ -457,7 +530,7 @@ cdef class ExecutionClient(Component):
             client_order_id=client_order_id,
             venue_order_id=venue_order_id,
             reason=reason,
-            event_id=self._uuid_factory.generate(),
+            event_id=UUID4(),
             ts_event=ts_event,
             ts_init=self._clock.timestamp_ns(),
         )
@@ -471,7 +544,7 @@ cdef class ExecutionClient(Component):
         ClientOrderId client_order_id,
         VenueOrderId venue_order_id,
         str reason,
-        int64_t ts_event,
+        uint64_t ts_event,
     ) except *:
         """
         Generate an `OrderCancelRejected` event and send it to the `ExecutionEngine`.
@@ -485,10 +558,10 @@ cdef class ExecutionClient(Component):
         client_order_id : ClientOrderId
             The client order ID.
         venue_order_id : VenueOrderId
-            The venue order ID.
+            The venue order ID (assigned by the venue).
         reason : str
             The order cancel rejected reason.
-        ts_event : datetime
+        ts_event : uint64_t
             The UNIX timestamp (nanoseconds) when the order cancel rejected event occurred.
 
         """
@@ -501,7 +574,7 @@ cdef class ExecutionClient(Component):
             client_order_id=client_order_id,
             venue_order_id=venue_order_id,
             reason=reason,
-            event_id=self._uuid_factory.generate(),
+            event_id=UUID4(),
             ts_event=ts_event,
             ts_init=self._clock.timestamp_ns(),
         )
@@ -516,8 +589,8 @@ cdef class ExecutionClient(Component):
         VenueOrderId venue_order_id,
         Quantity quantity,
         Price price,
-        Price trigger,
-        int64_t ts_event,
+        Price trigger_price,
+        uint64_t ts_event,
         bint venue_order_id_modified=False,
     ) except *:
         """
@@ -532,14 +605,14 @@ cdef class ExecutionClient(Component):
         client_order_id : ClientOrderId
             The client order ID.
         venue_order_id : VenueOrderId
-            The venue order ID.
+            The venue order ID (assigned by the venue).
         quantity : Quantity
             The orders current quantity.
         price : Price
             The orders current price.
-        trigger : Price, optional
+        trigger_price : Price, optional
             The orders current trigger price.
-        ts_event : int64
+        ts_event : uint64_t
             The UNIX timestamp (nanoseconds) when the order update event occurred.
         venue_order_id_modified : bool
             If the ID was modified for this event.
@@ -551,7 +624,10 @@ cdef class ExecutionClient(Component):
         # Check venue_order_id against cache, only allow modification when `venue_order_id_modified=True`
         if not venue_order_id_modified:
             existing = self._cache.venue_order_id(client_order_id)
-            Condition.equal(existing, venue_order_id, "existing", "order.venue_order_id")
+            if existing is not None:
+                Condition.equal(existing, venue_order_id, "existing", "order.venue_order_id")
+            else:
+                self._log.warning(f"{venue_order_id} does not match existing {repr(existing)}")
 
         # Generate event
         cdef OrderUpdated updated = OrderUpdated(
@@ -563,8 +639,8 @@ cdef class ExecutionClient(Component):
             venue_order_id=venue_order_id,
             quantity=quantity,
             price=price,
-            trigger=trigger,
-            event_id=self._uuid_factory.generate(),
+            trigger_price=trigger_price,
+            event_id=UUID4(),
             ts_event=ts_event,
             ts_init=self._clock.timestamp_ns(),
         )
@@ -577,7 +653,7 @@ cdef class ExecutionClient(Component):
         InstrumentId instrument_id,
         ClientOrderId client_order_id,
         VenueOrderId venue_order_id,
-        int64_t ts_event,
+        uint64_t ts_event,
     ) except *:
         """
         Generate an `OrderCanceled` event and send it to the `ExecutionEngine`.
@@ -591,8 +667,8 @@ cdef class ExecutionClient(Component):
         client_order_id : ClientOrderId
             The client order ID.
         venue_order_id : VenueOrderId
-            The venue order ID.
-        ts_event : int64
+            The venue order ID (assigned by the venue).
+        ts_event : uint64_t
             The UNIX timestamp (nanoseconds) when order canceled event occurred.
 
         """
@@ -604,7 +680,7 @@ cdef class ExecutionClient(Component):
             instrument_id=instrument_id,
             client_order_id=client_order_id,
             venue_order_id=venue_order_id,
-            event_id=self._uuid_factory.generate(),
+            event_id=UUID4(),
             ts_event=ts_event,
             ts_init=self._clock.timestamp_ns(),
         )
@@ -617,7 +693,7 @@ cdef class ExecutionClient(Component):
         InstrumentId instrument_id,
         ClientOrderId client_order_id,
         VenueOrderId venue_order_id,
-        int64_t ts_event,
+        uint64_t ts_event,
     ) except *:
         """
         Generate an `OrderTriggered` event and send it to the `ExecutionEngine`.
@@ -631,8 +707,8 @@ cdef class ExecutionClient(Component):
         client_order_id : ClientOrderId
             The client order ID.
         venue_order_id : VenueOrderId
-            The venue order ID.
-        ts_event : int64
+            The venue order ID (assigned by the venue).
+        ts_event : uint64_t
             The UNIX timestamp (nanoseconds) when the order triggered event occurred.
 
         """
@@ -644,7 +720,7 @@ cdef class ExecutionClient(Component):
             instrument_id=instrument_id,
             client_order_id=client_order_id,
             venue_order_id=venue_order_id,
-            event_id=self._uuid_factory.generate(),
+            event_id=UUID4(),
             ts_event=ts_event,
             ts_init=self._clock.timestamp_ns(),
         )
@@ -657,7 +733,7 @@ cdef class ExecutionClient(Component):
         InstrumentId instrument_id,
         ClientOrderId client_order_id,
         VenueOrderId venue_order_id,
-        int64_t ts_event,
+        uint64_t ts_event,
     ) except *:
         """
         Generate an `OrderExpired` event and send it to the `ExecutionEngine`.
@@ -671,8 +747,8 @@ cdef class ExecutionClient(Component):
         client_order_id : ClientOrderId
             The client order ID.
         venue_order_id : VenueOrderId
-            The venue order ID.
-        ts_event : int64
+            The venue order ID (assigned by the venue).
+        ts_event : uint64_t
             The UNIX timestamp (nanoseconds) when the order expired event occurred.
 
         """
@@ -684,7 +760,7 @@ cdef class ExecutionClient(Component):
             instrument_id=instrument_id,
             client_order_id=client_order_id,
             venue_order_id=venue_order_id,
-            event_id=self._uuid_factory.generate(),
+            event_id=UUID4(),
             ts_event=ts_event,
             ts_init=self._clock.timestamp_ns(),
         )
@@ -697,8 +773,8 @@ cdef class ExecutionClient(Component):
         InstrumentId instrument_id,
         ClientOrderId client_order_id,
         VenueOrderId venue_order_id,
-        PositionId venue_position_id,  # Can be None
-        ExecutionId execution_id,
+        PositionId venue_position_id: Optional[PositionId],
+        TradeId trade_id,
         OrderSide order_side,
         OrderType order_type,
         Quantity last_qty,
@@ -706,7 +782,7 @@ cdef class ExecutionClient(Component):
         Currency quote_currency,
         Money commission,
         LiquiditySide liquidity_side,
-        int64_t ts_event,
+        uint64_t ts_event,
     ) except *:
         """
         Generate an `OrderFilled` event and send it to the `ExecutionEngine`.
@@ -720,15 +796,15 @@ cdef class ExecutionClient(Component):
         client_order_id : ClientOrderId
             The client order ID.
         venue_order_id : VenueOrderId
-            The venue order ID.
-        execution_id : ExecutionId
-            The execution ID.
+            The venue order ID (assigned by the venue).
+        trade_id : TradeId
+            The trade ID.
         venue_position_id : PositionId, optional
             The venue position ID associated with the order. If the trading
             venue has assigned a position ID / ticket then pass that here,
             otherwise pass ``None`` and the execution engine OMS will handle
             position ID resolution.
-        order_side : OrderSide
+        order_side : OrderSide {``BUY``, ``SELL``}
             The execution order side.
         order_type : OrderType
             The execution order type.
@@ -740,9 +816,9 @@ cdef class ExecutionClient(Component):
             The currency of the price.
         commission : Money
             The fill commission.
-        liquidity_side : LiquiditySide
+        liquidity_side : LiquiditySide {``NONE``, ``MAKER``, ``TAKER``}
             The execution liquidity side.
-        ts_event : int64
+        ts_event : uint64_t
             The UNIX timestamp (nanoseconds) when the order filled event occurred.
 
         """
@@ -756,7 +832,7 @@ cdef class ExecutionClient(Component):
             instrument_id=instrument_id,
             client_order_id=client_order_id,
             venue_order_id=venue_order_id,
-            execution_id=execution_id,
+            trade_id=trade_id,
             position_id=venue_position_id,
             order_side=order_side,
             order_type=order_type,
@@ -765,7 +841,7 @@ cdef class ExecutionClient(Component):
             currency=quote_currency,
             commission=commission,
             liquidity_side=liquidity_side,
-            event_id=self._uuid_factory.generate(),
+            event_id=UUID4(),
             ts_event=ts_event,
             ts_init=self._clock.timestamp_ns(),
         )
@@ -784,4 +860,22 @@ cdef class ExecutionClient(Component):
         self._msgbus.send(
             endpoint="ExecEngine.process",
             msg=event,
+        )
+
+    cpdef void _send_mass_status_report(self, ExecutionMassStatus report) except *:
+        self._msgbus.send(
+            endpoint="ExecEngine.reconcile_mass_status",
+            msg=report,
+        )
+
+    cpdef void _send_order_status_report(self, OrderStatusReport report) except *:
+        self._msgbus.send(
+            endpoint="ExecEngine.reconcile_report",
+            msg=report,
+        )
+
+    cpdef void _send_trade_report(self, TradeReport report) except *:
+        self._msgbus.send(
+            endpoint="ExecEngine.reconcile_report",
+            msg=report,
         )

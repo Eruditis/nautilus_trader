@@ -14,7 +14,9 @@
 # -------------------------------------------------------------------------------------------------
 
 import datetime
+import pathlib
 import sys
+from decimal import Decimal
 
 import fsspec
 import pyarrow.dataset as ds
@@ -23,15 +25,21 @@ import pytest
 from nautilus_trader.adapters.betfair.providers import BetfairInstrumentProvider
 from nautilus_trader.backtest.data.providers import TestInstrumentProvider
 from nautilus_trader.backtest.data.wranglers import BarDataWrangler
+from nautilus_trader.model.currencies import USD
 from nautilus_trader.model.data.base import GenericData
 from nautilus_trader.model.data.tick import QuoteTick
 from nautilus_trader.model.data.tick import TradeTick
 from nautilus_trader.model.enums import AggressorSide
+from nautilus_trader.model.identifiers import InstrumentId
+from nautilus_trader.model.identifiers import Symbol
+from nautilus_trader.model.identifiers import TradeId
 from nautilus_trader.model.identifiers import Venue
 from nautilus_trader.model.instruments.betting import BettingInstrument
+from nautilus_trader.model.instruments.equity import Equity
 from nautilus_trader.model.objects import Price
 from nautilus_trader.model.objects import Quantity
-from nautilus_trader.persistence.catalog import DataCatalog
+from nautilus_trader.persistence.catalog.parquet import ParquetDataCatalog
+from nautilus_trader.persistence.catalog.parquet import resolve_path
 from nautilus_trader.persistence.external.core import dicts_to_dataframes
 from nautilus_trader.persistence.external.core import process_files
 from nautilus_trader.persistence.external.core import split_and_serialize
@@ -40,23 +48,24 @@ from nautilus_trader.persistence.external.core import write_tables
 from nautilus_trader.persistence.external.readers import CSVReader
 from tests.integration_tests.adapters.betfair.test_kit import BetfairTestStubs
 from tests.test_kit import PACKAGE_ROOT
-from tests.test_kit.mocks import NewsEventData
-from tests.test_kit.mocks import data_catalog_setup
-from tests.test_kit.stubs import TestStubs
+from tests.test_kit.mocks.data import NewsEventData
+from tests.test_kit.mocks.data import data_catalog_setup
+from tests.test_kit.stubs.data import TestDataStubs
+from tests.test_kit.stubs.identifiers import TestIdStubs
+from tests.test_kit.stubs.persistence import TestPersistenceStubs
 
 
 TEST_DATA_DIR = PACKAGE_ROOT + "/data"
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="test path broken on windows")
 class TestPersistenceCatalog:
     def setup(self):
         data_catalog_setup()
-        self.catalog = DataCatalog.from_env()
+        self.catalog = ParquetDataCatalog.from_env()
         self.fs: fsspec.AbstractFileSystem = self.catalog.fs
-        self._loaded_data_into_catalog()
+        self._load_data_into_catalog()
 
-    def _loaded_data_into_catalog(self):
+    def _load_data_into_catalog(self):
         self.instrument_provider = BetfairInstrumentProvider.from_instruments([])
         process_files(
             glob_path=PACKAGE_ROOT + "/data/1.166564490.bz2",
@@ -64,6 +73,20 @@ class TestPersistenceCatalog:
             instrument_provider=self.instrument_provider,
             catalog=self.catalog,
         )
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="windows only")
+    def test_catalog_root_path_windows_local(self):
+        from tempfile import tempdir
+
+        catalog = ParquetDataCatalog(path=tempdir, fs_protocol="file")
+        path = resolve_path(path=catalog.path / "test", fs=catalog.fs)
+        assert path == str(pathlib.Path(tempdir) / "test")
+
+    @pytest.mark.skipif(sys.platform != "win32", reason="windows only")
+    def test_catalog_root_path_windows_non_local(self):
+        catalog = ParquetDataCatalog(path="/some/path", fs_protocol="memory")
+        path = resolve_path(path=catalog.path / "test", fs=catalog.fs)
+        assert path == "/some/path/test"
 
     def test_list_data_types(self):
         data_types = self.catalog.list_data_types()
@@ -80,17 +103,16 @@ class TestPersistenceCatalog:
         instruments = self.catalog.instruments()
         assert len(instruments) == 2
 
+    @pytest.mark.skip(reason="schema change")
     def test_writing_instruments_doesnt_overwrite(self):
         instruments = self.catalog.instruments(as_nautilus=True)
         write_objects(catalog=self.catalog, chunk=[instruments[0]])
         write_objects(catalog=self.catalog, chunk=[instruments[1]])
         instruments = self.catalog.instruments(as_nautilus=True)
-        assert len(instruments) == 2
+        assert len(instruments) == 3
 
     def test_data_catalog_instruments_filtered_df(self):
-        instrument_id = (
-            "Basketball,,29628709,20191221-001000,ODDS,MATCH_ODDS,1.166564490,237491,0.0.BETFAIR"
-        )
+        instrument_id = "296287091.1665644902374910.0.BETFAIR"
         instruments = self.catalog.instruments(instrument_ids=[instrument_id])
         assert len(instruments) == 1
         assert instruments["id"].iloc[0] == instrument_id
@@ -101,7 +123,7 @@ class TestPersistenceCatalog:
 
     def test_data_catalog_currency_with_null_max_price_loads(self):
         # Arrange
-        catalog = DataCatalog.from_env()
+        catalog = ParquetDataCatalog.from_env()
         instrument = TestInstrumentProvider.default_fx_ccy("AUD/USD", venue=Venue("SIM"))
         write_objects(catalog=catalog, chunk=[instrument])
 
@@ -113,14 +135,14 @@ class TestPersistenceCatalog:
 
     def test_data_catalog_instrument_ids_correctly_unmapped(self):
         # Arrange
-        catalog = DataCatalog.from_env()
+        catalog = ParquetDataCatalog.from_env()
         instrument = TestInstrumentProvider.default_fx_ccy("AUD/USD", venue=Venue("SIM"))
         trade_tick = TradeTick(
             instrument_id=instrument.id,
             price=Price.from_str("2.0"),
             size=Quantity.from_int(10),
             aggressor_side=AggressorSide.UNKNOWN,
-            trade_id="1",
+            trade_id=TradeId("1"),
             ts_event=0,
             ts_init=0,
         )
@@ -159,7 +181,9 @@ class TestPersistenceCatalog:
 
         # Assert
         assert len(df) == 1
-        assert self.fs.isdir("/root/data/quote_tick.parquet/instrument_id=AUD-USD.SIM/")
+        assert self.fs.isdir(
+            "/.nautilus/catalog/data/quote_tick.parquet/instrument_id=AUD-USD.SIM/"
+        )
         # Ensure we "unmap" the keys that we write the partition filenames as;
         # this instrument_id should be AUD/USD not AUD-USD
         assert df.iloc[0]["instrument_id"] == instrument.id.value
@@ -193,10 +217,10 @@ class TestPersistenceCatalog:
         assert len(filtered_deltas) == 351
 
     def test_data_catalog_generic_data(self):
-        TestStubs.setup_news_event_persistence()
+        TestPersistenceStubs.setup_news_event_persistence()
         process_files(
             glob_path=f"{TEST_DATA_DIR}/news_events.csv",
-            reader=CSVReader(block_parser=TestStubs.news_event_parser),
+            reader=CSVReader(block_parser=TestPersistenceStubs.news_event_parser),
             catalog=self.catalog,
         )
         df = self.catalog.generic_data(cls=NewsEventData, filter_expr=ds.field("currency") == "USD")
@@ -208,7 +232,7 @@ class TestPersistenceCatalog:
 
     def test_data_catalog_bars(self):
         # Arrange
-        bar_type = TestStubs.bartype_adabtc_binance_1min_last()
+        bar_type = TestDataStubs.bartype_adabtc_binance_1min_last()
         instrument = TestInstrumentProvider.adabtc_binance()
         wrangler = BarDataWrangler(bar_type, instrument)
 
@@ -244,8 +268,65 @@ class TestPersistenceCatalog:
         bars = self.catalog.bars()
         assert len(bars) == 21
 
+    def test_catalog_bar_query_instrument_id(self):
+        # Arrange
+        bar = TestDataStubs.bar_5decimal()
+        write_objects(catalog=self.catalog, chunk=[bar])
+
+        # Act
+        objs = self.catalog.bars(instrument_ids=[TestIdStubs.audusd_id().value], as_nautilus=True)
+        data = self.catalog.bars(instrument_ids=[TestIdStubs.audusd_id().value])
+
+        # Assert
+        assert len(objs) == 1
+        assert data.shape[0] == 1
+        assert "instrument_id" in data.columns
+
     def test_catalog_projections(self):
         projections = {"tid": ds.field("trade_id")}
         trades = self.catalog.trade_ticks(projections=projections)
         assert "tid" in trades.columns
         assert trades["trade_id"].equals(trades["tid"])
+
+    def test_catalog_persists_equity(self):
+        # Arrange
+        instrument = Equity(
+            instrument_id=InstrumentId(symbol=Symbol("AAPL"), venue=Venue("NASDAQ")),
+            native_symbol=Symbol("AAPL"),
+            currency=USD,
+            price_precision=2,
+            price_increment=Price.from_str("0.01"),
+            multiplier=Quantity.from_int(1),
+            lot_size=Quantity.from_int(1),
+            isin="US0378331005",
+            ts_event=0,
+            ts_init=0,
+            margin_init=Decimal("0.01"),
+            margin_maint=Decimal("0.005"),
+            maker_fee=Decimal("0.005"),
+            taker_fee=Decimal("0.01"),
+        )
+
+        quote_tick = QuoteTick(
+            instrument_id=instrument.id,
+            ask=Price.from_str("2.0"),
+            bid=Price.from_str("2.1"),
+            bid_size=Quantity.from_int(10),
+            ask_size=Quantity.from_int(10),
+            ts_event=0,
+            ts_init=0,
+        )
+
+        # Act
+        catalog = ParquetDataCatalog.from_env()
+        write_objects(catalog=catalog, chunk=[instrument, quote_tick])
+        instrument_from_catalog = catalog.instruments(
+            as_nautilus=True,
+            instrument_ids=[instrument.id.value],
+        )[0]
+
+        # Assert
+        assert instrument.taker_fee == instrument_from_catalog.taker_fee
+        assert instrument.maker_fee == instrument_from_catalog.maker_fee
+        assert instrument.margin_init == instrument_from_catalog.margin_init
+        assert instrument.margin_maint == instrument_from_catalog.margin_maint

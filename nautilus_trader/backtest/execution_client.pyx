@@ -13,23 +13,24 @@
 #  limitations under the License.
 # -------------------------------------------------------------------------------------------------
 
+from nautilus_trader.accounting.factory import AccountFactory
+
 from nautilus_trader.backtest.exchange cimport SimulatedExchange
 from nautilus_trader.cache.cache cimport Cache
 from nautilus_trader.common.clock cimport TestClock
 from nautilus_trader.common.logging cimport Logger
 from nautilus_trader.core.correctness cimport Condition
 from nautilus_trader.execution.client cimport ExecutionClient
-from nautilus_trader.model.commands.trading cimport CancelAllOrders
-from nautilus_trader.model.commands.trading cimport CancelOrder
-from nautilus_trader.model.commands.trading cimport ModifyOrder
-from nautilus_trader.model.commands.trading cimport SubmitOrder
-from nautilus_trader.model.commands.trading cimport SubmitOrderList
+from nautilus_trader.execution.messages cimport CancelAllOrders
+from nautilus_trader.execution.messages cimport CancelOrder
+from nautilus_trader.execution.messages cimport ModifyOrder
+from nautilus_trader.execution.messages cimport SubmitOrder
+from nautilus_trader.execution.messages cimport SubmitOrderList
 from nautilus_trader.model.identifiers cimport AccountId
 from nautilus_trader.model.identifiers cimport ClientId
+from nautilus_trader.model.identifiers cimport Venue
 from nautilus_trader.model.orders.base cimport Order
 from nautilus_trader.msgbus.bus cimport MessageBus
-
-from nautilus_trader.accounting.factory import AccountFactory
 
 
 cdef class BacktestExecClient(ExecutionClient):
@@ -40,8 +41,6 @@ cdef class BacktestExecClient(ExecutionClient):
     ----------
     exchange : SimulatedExchange
         The simulated exchange for the backtest.
-    account_id : AccountId
-        The account ID for the client.
     msgbus : MessageBus
         The message bus for the client.
     cache : Cache
@@ -52,24 +51,24 @@ cdef class BacktestExecClient(ExecutionClient):
         The logger for the client.
     routing : bool
         If multi-venue routing is enabled for the client.
-    is_frozen_account : bool
+    frozen_account : bool
         If the backtest run account is frozen.
     """
 
     def __init__(
         self,
         SimulatedExchange exchange not None,
-        AccountId account_id not None,
         MessageBus msgbus not None,
         Cache cache not None,
         TestClock clock not None,
         Logger logger not None,
         bint routing=False,
-        bint is_frozen_account=False,
+        bint frozen_account=False,
     ):
         super().__init__(
             client_id=ClientId(exchange.id.value),
-            account_id=account_id,
+            venue=Venue(exchange.id.value),
+            oms_type=exchange.oms_type,
             account_type=exchange.account_type,
             base_currency=exchange.base_currency,
             msgbus=msgbus,
@@ -79,8 +78,9 @@ cdef class BacktestExecClient(ExecutionClient):
             config={"routing": True} if routing else None,
         )
 
-        if not is_frozen_account:
-            AccountFactory.register_calculated_account(account_id.issuer)
+        self._set_account_id(AccountId(f"{exchange.id.value}-001"))
+        if not frozen_account:
+            AccountFactory.register_calculated_account(exchange.id.value)
 
         self._exchange = exchange
         self.is_connected = False
@@ -95,18 +95,9 @@ cdef class BacktestExecClient(ExecutionClient):
         self.is_connected = False
         self._log.info(f"Disconnected.")
 
-# -- COMMAND HANDLERS ------------------------------------------------------------------------------
+# -- COMMAND HANDLERS -----------------------------------------------------------------------------
 
     cpdef void submit_order(self, SubmitOrder command) except *:
-        """
-        Submit the order contained in the given command for execution.
-
-        Parameters
-        ----------
-        command : SubmitOrder
-            The command to execute.
-
-        """
         Condition.true(self.is_connected, "not connected")
 
         self.generate_order_submitted(
@@ -119,15 +110,6 @@ cdef class BacktestExecClient(ExecutionClient):
         self._exchange.send(command)
 
     cpdef void submit_order_list(self, SubmitOrderList command) except *:
-        """
-        Submit the order list contained in the given command for execution.
-
-        Parameters
-        ----------
-        command : SubmitOrderList
-            The command to execute.
-
-        """
         Condition.true(self.is_connected, "not connected")
 
         cdef Order order
@@ -142,43 +124,16 @@ cdef class BacktestExecClient(ExecutionClient):
         self._exchange.send(command)
 
     cpdef void modify_order(self, ModifyOrder command) except *:
-        """
-        Modify the order with parameters contained in the command.
-
-        Parameters
-        ----------
-        command : ModifyOrder
-            The command to execute.
-
-        """
         Condition.true(self.is_connected, "not connected")
 
         self._exchange.send(command)
 
     cpdef void cancel_order(self, CancelOrder command) except *:
-        """
-        Cancel the order with the client order ID contained in the given command.
-
-        Parameters
-        ----------
-        command : CancelOrder
-            The command to execute.
-
-        """
         Condition.true(self.is_connected, "not connected")
 
         self._exchange.send(command)
 
     cpdef void cancel_all_orders(self, CancelAllOrders command) except *:
-        """
-        Cancel all orders for the instrument ID contained in the given command.
-
-        Parameters
-        ----------
-        command : CancelAllOrders
-            The command to execute.
-
-        """
         Condition.true(self.is_connected, "not connected")
 
         self._exchange.send(command)

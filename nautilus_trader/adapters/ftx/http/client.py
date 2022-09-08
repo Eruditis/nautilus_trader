@@ -19,7 +19,7 @@ import json
 import urllib.parse
 from typing import Any, Dict, List, Optional
 
-import orjson
+import msgspec
 import pandas as pd
 from aiohttp import ClientResponse
 from aiohttp import ClientResponseError
@@ -43,10 +43,11 @@ class FTXHttpClient(HttpClient):
         loop: asyncio.AbstractEventLoop,
         clock: LiveClock,
         logger: Logger,
-        key=None,
-        secret=None,
-        base_url=None,
-        subaccount_name=None,
+        key: Optional[str] = None,
+        secret: Optional[str] = None,
+        base_url: Optional[str] = None,
+        subaccount: Optional[str] = None,
+        us: bool = False,
     ):
         super().__init__(
             loop=loop,
@@ -56,7 +57,15 @@ class FTXHttpClient(HttpClient):
         self._key = key
         self._secret = secret
         self._base_url = base_url or self.BASE_URL
-        self._subaccount_name = subaccount_name
+        self._subaccount = subaccount
+        self._us = us
+        if self._base_url == self.BASE_URL and us:
+            self._base_url = self._base_url.replace("com", "us")
+        self._ftx_header = "FTX" if not us else "FTXUS"
+
+    @property
+    def base_url(self) -> str:
+        return self._base_url
 
     @property
     def api_key(self) -> str:
@@ -79,12 +88,14 @@ class FTXHttpClient(HttpClient):
         http_method: str,
         url_path: str,
         payload: Dict[str, str] = None,
+        params: Dict[str, Any] = None,
     ) -> Any:
         ts: int = self._clock.timestamp_ms()
 
         headers = {}
-        signature_payload: str = f"{ts}{http_method}/api/{url_path}"
-        if payload and http_method in ["POST", "DELETE"]:
+        query = self._url_encode(params)
+        signature_payload: str = f"{ts}{http_method}/api/{url_path}{query}"
+        if payload:
             signature_payload += self._prepare_payload(payload)
             headers["Content-Type"] = "application/json"
 
@@ -94,19 +105,20 @@ class FTXHttpClient(HttpClient):
 
         headers = {
             **headers,
-            "FTX-KEY": self._key,
-            "FTX-SIGN": signature,
-            "FTX-TS": str(ts),
+            f"{self._ftx_header}-KEY": self._key,
+            f"{self._ftx_header}-SIGN": signature,
+            f"{self._ftx_header}-TS": str(ts),
         }
 
-        if self._subaccount_name:
-            headers["FTX-SUBACCOUNT"] = urllib.parse.quote(self._subaccount_name)
+        if self._subaccount:
+            headers[f"{self._ftx_header}-SUBACCOUNT"] = urllib.parse.quote(self._subaccount)
 
         return await self._send_request(
             http_method=http_method,
             url_path=url_path,
             headers=headers,
             payload=payload,
+            params=params,
         )
 
     async def _send_request(
@@ -117,10 +129,10 @@ class FTXHttpClient(HttpClient):
         payload: Dict[str, str] = None,
         params: Dict[str, str] = None,
     ) -> Any:
-        # TODO(cs): Uncomment for development
-        # print(f"{http_method} {url_path} {headers} {payload}")
         if payload is None:
             payload = {}
+        # TODO(cs): Uncomment for development
+        # print(f"{http_method} {url_path} {headers} {payload}")
         query = self._url_encode(params)
         try:
             resp: ClientResponse = await self.request(
@@ -129,16 +141,16 @@ class FTXHttpClient(HttpClient):
                 headers=headers,
                 data=self._prepare_payload(payload),
             )
-        except ClientResponseError as ex:
-            await self._handle_exception(ex)
+        except ClientResponseError as e:
+            await self._handle_exception(e)
             return
 
         try:
-            data = orjson.loads(resp.data)
+            data = msgspec.json.decode(resp.data)
             if not data["success"]:
                 return data["error"]
             return data["result"]
-        except orjson.JSONDecodeError:
+        except msgspec.MsgspecError:
             self._log.error(f"Could not decode data to JSON: {resp.data}.")
 
     async def _handle_exception(self, error: ClientResponseError) -> None:
@@ -156,23 +168,6 @@ class FTXHttpClient(HttpClient):
                 message=error.message,
                 headers=error.headers,
             )
-
-    async def list_futures(self) -> List[Dict[str, Any]]:
-        return await self._send_request(http_method="GET", url_path="futures")
-
-    async def list_markets(self) -> List[Dict[str, Any]]:
-        return await self._send_request(http_method="GET", url_path="markets")
-
-    async def get_orderbook(self, market: str, depth: int = None) -> Dict[str, Any]:
-        payload: Dict[str, str] = {}
-        if depth is not None:
-            payload = {"depth": str(depth)}
-
-        return await self._send_request(
-            http_method="GET",
-            url_path=f"markets/{market}/orderbook",
-            payload=payload,
-        )
 
     async def get_trades(self, market: str) -> List[Dict[str, Any]]:
         return await self._send_request(
@@ -198,13 +193,40 @@ class FTXHttpClient(HttpClient):
             params=params,
         )
 
+    async def get_orderbook(self, market: str, depth: int = None) -> Dict[str, Any]:
+        payload: Dict[str, str] = {}
+        if depth is not None:
+            payload = {"depth": str(depth)}
+
+        return await self._send_request(
+            http_method="GET",
+            url_path=f"markets/{market}/orderbook",
+            payload=payload,
+        )
+
     async def get_account_info(self) -> Dict[str, Any]:
         return await self._sign_request(http_method="GET", url_path="account")
+
+    async def list_futures(self) -> List[Dict[str, Any]]:
+        return await self._send_request(http_method="GET", url_path="futures")
+
+    async def get_market(self, market: str) -> Dict[str, Any]:
+        return await self._send_request(http_method="GET", url_path=f"markets/{market}")
+
+    async def list_markets(self) -> List[Dict[str, Any]]:
+        return await self._send_request(http_method="GET", url_path="markets")
 
     async def get_open_orders(self, market: str = None) -> List[Dict[str, Any]]:
         return await self._sign_request(
             http_method="GET",
             url_path="orders",
+            payload={"market": market},
+        )
+
+    async def get_open_trigger_orders(self, market: str = None) -> List[Dict[str, Any]]:
+        return await self._sign_request(
+            http_method="GET",
+            url_path="conditional_orders",
             payload={"market": market},
         )
 
@@ -222,7 +244,7 @@ class FTXHttpClient(HttpClient):
         if side is not None:
             payload["side"] = side
         if order_type is not None:
-            payload["order_type"] = order_type
+            payload["orderType"] = order_type
         if start_time is not None:
             payload["start_time"] = str(start_time)
         if end_time is not None:
@@ -233,12 +255,12 @@ class FTXHttpClient(HttpClient):
             payload=payload,
         )
 
-    async def get_conditional_order_history(
+    async def get_trigger_order_history(
         self,
         market: str = None,
         side: str = None,
-        type: str = None,
-        order_type: str = None,
+        type: str = None,  # stop, trailing_stop, and take_profit
+        order_type: str = None,  # market or limit
         start_time: float = None,
         end_time: float = None,
     ) -> List[Dict[str, Any]]:
@@ -250,16 +272,33 @@ class FTXHttpClient(HttpClient):
         if type is not None:
             payload["type"] = type
         if order_type is not None:
-            payload["order_type"] = order_type
+            payload["orderType"] = order_type
         if start_time is not None:
             payload["start_time"] = str(start_time)
         if end_time is not None:
             payload["end_time"] = str(end_time)
-
         return await self._sign_request(
             http_method="GET",
             url_path="conditional_orders/history",
             payload=payload,
+        )
+
+    async def get_trigger_order_triggers(self, order_id: str) -> Dict[str, Any]:
+        return await self._sign_request(
+            http_method="GET",
+            url_path=f"conditional_orders/{order_id}/triggers",
+        )
+
+    async def get_order_status(self, order_id: str) -> Dict[str, Any]:
+        return await self._sign_request(
+            http_method="GET",
+            url_path=f"orders/{order_id}",
+        )
+
+    async def get_order_status_by_client_id(self, client_order_id: str) -> Dict[str, Any]:
+        return await self._sign_request(
+            http_method="GET",
+            url_path=f"orders/by_client_id/{client_order_id}",
         )
 
     async def modify_order(
@@ -268,17 +307,6 @@ class FTXHttpClient(HttpClient):
         price: Optional[str] = None,
         size: Optional[str] = None,
     ) -> dict:
-        # assert (existing_order_id is None) ^ (
-        #     existing_client_order_id is None
-        # ), "Must supply exactly one ID for the order to modify"
-        # assert (price is None) or (size is None), "Must modify price or size of order"
-
-        # url_path = (
-        #     f"orders/{existing_order_id}/modify"
-        #     if existing_order_id is not None
-        #     else f"orders/by_client_id/{existing_client_order_id}/modify"
-        # )
-
         payload: Dict[str, str] = {}
         if price is not None:
             payload["price"] = price
@@ -307,8 +335,8 @@ class FTXHttpClient(HttpClient):
         market: str,
         side: str,
         size: str,
-        type: str,
-        client_id: str,
+        order_type: str,
+        client_id: str = None,
         price: Optional[str] = None,
         ioc: bool = False,
         reduce_only: bool = False,
@@ -318,7 +346,7 @@ class FTXHttpClient(HttpClient):
             "market": market,
             "side": side,
             "price": price,
-            "type": type,
+            "type": order_type,
             "size": size,
             "ioc": ioc,
             "reduceOnly": reduce_only,
@@ -332,44 +360,43 @@ class FTXHttpClient(HttpClient):
             payload=payload,
         )
 
-    async def place_conditional_order(
+    async def place_trigger_order(
         self,
         market: str,
         side: str,
         size: str,
-        type: str,
-        client_id: str,
+        order_type: str,
+        client_id: str = None,
         price: Optional[str] = None,
-        trigger: Optional[str] = None,
+        trigger_price: Optional[str] = None,
         trail_value: Optional[str] = None,
         reduce_only: bool = False,
     ) -> Dict[str, Any]:
         """
-        To send a Stop Market order, set type='stop' and supply a trigger_price
-        To send a Stop Limit order, also supply a limit_price
-        To send a Take Profit Market order, set type='trailing_stop' and supply a trigger_price
-        To send a Trailing Stop order, set type='trailing_stop' and supply a trail_value
+        To place a Stop-Market order, set type='stop' and supply a trigger_price
+        To place a Stop-Limit order, also supply a limit_price
+        To place a Take-Profit Market order, set type='trailing_stop' and supply a trigger_price
+        To place a Trailing-Stop order, set type='trailing_stop' and supply a trail_value
         """
-        # assert type in ("stop", "take_profit", "trailing_stop")
+        # assert order_type in ("stop", "take_profit", "trailing_stop")
         # assert (
-        #     type not in ("stop", "take_profit") or trigger_price is not None
+        #         order_type not in ("stop", "take_profit") or trigger_price is not None
         # ), "Need trigger prices for stop losses and take profits"
-        # assert type not in ("trailing_stop",) or (
+        # assert order_type not in ("trailing_stop",) or (
         #     trigger_price is None and trail_value is not None
         # ), "Trailing stops need a trail value and cannot take a trigger price"
         payload: Dict[str, Any] = {
             "market": market,
             "side": side,
             "size": size,
-            "type": type,
+            "type": order_type,
             "clientId": client_id,
-            "limitPrice": client_id,
             "reduceOnly": reduce_only,
         }
         if price is not None:
             payload["orderPrice"] = price
-        if trigger is not None:
-            payload["triggerPrice"] = trigger
+        if trigger_price is not None:
+            payload["triggerPrice"] = trigger_price
         if trail_value is not None:
             payload["trailValue"] = trail_value
         return await self._sign_request(
@@ -378,10 +405,22 @@ class FTXHttpClient(HttpClient):
             payload=payload,
         )
 
-    async def cancel_order(self, client_order_id: str) -> Dict[str, Any]:
+    async def cancel_order(self, order_id: str) -> Dict[str, Any]:
+        return await self._sign_request(
+            http_method="DELETE",
+            url_path=f"orders/{order_id}",
+        )
+
+    async def cancel_order_by_client_id(self, client_order_id: str) -> Dict[str, Any]:
         return await self._sign_request(
             http_method="DELETE",
             url_path=f"orders/by_client_id/{client_order_id}",
+        )
+
+    async def cancel_open_trigger_order(self, trigger_id: str) -> str:
+        return await self._sign_request(
+            http_method="DELETE",
+            url_path=f"conditional_orders/{trigger_id}",
         )
 
     async def cancel_all_orders(self, market: str) -> Dict[str, Any]:
@@ -393,32 +432,29 @@ class FTXHttpClient(HttpClient):
 
     async def get_fills(
         self,
-        market: str,
-        start_time: int,
-        end_time: int,
+        market: Optional[str] = "ETH-PERP",
+        start_time: Optional[int] = None,
+        end_time: Optional[int] = None,
     ) -> List[dict]:
-        payload: Dict[str, Any] = {
-            "market": market,
-            "order": "asc",
-        }
+        payload: Dict[str, Any] = {}
+        if market is not None:
+            payload["market"] = market
         if start_time is not None:
             payload["start_time"] = str(start_time)
         if end_time is not None:
             payload["end_time"] = str(end_time)
-        return await self._send_request(
+        return await self._sign_request(
             http_method="GET",
             url_path="fills",
             payload=payload,
         )
 
-    async def get_balances(self) -> List[dict]:
-        return await self._get("wallet/balances")
-
-    async def get_deposit_address(self, ticker: str) -> dict:
-        return await self._get(f"wallet/deposit_address/{ticker}")
-
     async def get_positions(self, show_avg_price: bool = False) -> List[dict]:
-        return await self._get("positions", {"showAvgPrice": show_avg_price})
+        return await self._sign_request(
+            http_method="GET",
+            url_path="positions",
+            params={"showAvgPrice": show_avg_price},
+        )
 
     async def get_position(self, name: str, show_avg_price: bool = False) -> dict:
         positions = await self.get_positions(show_avg_price)
@@ -431,18 +467,20 @@ class FTXHttpClient(HttpClient):
         limit = 100
         results = []
         while True:
+            payload: Dict[str, Any] = {}
+            if start_time is not None:
+                payload["start_time"] = str(start_time)
+            if end_time is not None:
+                payload["end_time"] = str(end_time)
             response = await self._send_request(
                 http_method="GET",
                 url_path=f"markets/{market}/trades",
-                # payload={
-                #     "end_time": end_time,
-                #     "start_time": start_time,
-                # },
+                payload=payload,
             )
             deduped_trades = [r for r in response if r["id"] not in ids]
             results.extend(deduped_trades)
             ids |= {r["id"] for r in deduped_trades}
-            print(f"Adding {len(response)} trades with end time {end_time}")
+            # print(f"Adding {len(response)} trades with end time {end_time}")
             if len(response) == 0:
                 break
             end_time = min(pd.Timestamp(t["time"]) for t in response).timestamp()

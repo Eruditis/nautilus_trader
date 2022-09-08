@@ -15,12 +15,12 @@
 
 import random
 
-from libc.stdint cimport int64_t
+from libc.stdint cimport uint64_t
 
 from nautilus_trader.core.correctness cimport Condition
 
 
-cdef int64_t NANOSECONDS_IN_MILLISECOND = 1_000_000
+cdef uint64_t NANOSECONDS_IN_MILLISECOND = 1_000_000
 
 
 cdef class FillModel:
@@ -140,10 +140,10 @@ cdef class LatencyModel:
 
     def __init__(
         self,
-        int base_latency_nanos = NANOSECONDS_IN_MILLISECOND,
-        int insert_latency_nanos = 0,
-        int update_latency_nanos = 0,
-        int cancel_latency_nanos = 0,
+        uint64_t base_latency_nanos = NANOSECONDS_IN_MILLISECOND,
+        uint64_t insert_latency_nanos = 0,
+        uint64_t update_latency_nanos = 0,
+        uint64_t cancel_latency_nanos = 0,
     ):
         Condition.not_negative_int(base_latency_nanos, "base_latency_nanos")
         Condition.not_negative_int(insert_latency_nanos, "insert_latency_nanos")

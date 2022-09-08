@@ -30,10 +30,10 @@ cdef class MessageBus:
     """
     Provides a generic message bus to facilitate various messaging patterns.
 
-    The bus provides both a producer and consumer API for PUB/SUB, REQ/REP, as
+    The bus provides both a producer and consumer API for Pub/Sub, Req/Rep, as
     well as direct point-to-point messaging to registered endpoints.
 
-    PUB/SUB wildcard patterns for hierarchical topics are possible:
+    Pub/Sub wildcard patterns for hierarchical topics are possible:
      - `*` asterisk represents one or more characters in a pattern.
      - `?` question mark represents a single character in a pattern.
 
@@ -177,7 +177,7 @@ cdef class MessageBus:
         """
         Condition.valid_string(endpoint, "endpoint")
         Condition.callable(handler, "handler")
-        Condition.not_in(endpoint, self._endpoints, "endpoint", "self._endpoints")
+        Condition.not_in(endpoint, self._endpoints, "endpoint", "_endpoints")
 
         self._endpoints[endpoint] = handler
 

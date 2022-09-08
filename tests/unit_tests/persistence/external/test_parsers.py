@@ -14,19 +14,17 @@
 # -------------------------------------------------------------------------------------------------
 
 import pathlib
-import sys
 from functools import partial
 
-import orjson
+import msgspec
 import pandas as pd
-import pytest
 
 from nautilus_trader.adapters.betfair.providers import BetfairInstrumentProvider
 from nautilus_trader.backtest.data.providers import TestInstrumentProvider
 from nautilus_trader.backtest.data.wranglers import BarDataWrangler
 from nautilus_trader.backtest.data.wranglers import QuoteTickDataWrangler
-from nautilus_trader.model.instruments.currency import CurrencySpot
-from nautilus_trader.persistence.catalog import DataCatalog
+from nautilus_trader.model.instruments.currency_pair import CurrencyPair
+from nautilus_trader.persistence.catalog.parquet import ParquetDataCatalog
 from nautilus_trader.persistence.external.core import make_raw_files
 from nautilus_trader.persistence.external.core import process_files
 from nautilus_trader.persistence.external.core import process_raw_file
@@ -38,20 +36,18 @@ from nautilus_trader.persistence.external.readers import TextReader
 from tests.integration_tests.adapters.betfair.test_kit import BetfairDataProvider
 from tests.integration_tests.adapters.betfair.test_kit import BetfairTestStubs
 from tests.test_kit import PACKAGE_ROOT
-from tests.test_kit.mocks import MockReader
-from tests.test_kit.mocks import data_catalog_setup
-from tests.test_kit.stubs import TestStubs
+from tests.test_kit.mocks.data import MockReader
+from tests.test_kit.mocks.data import data_catalog_setup
+from tests.test_kit.stubs.data import TestDataStubs
 
 
 TEST_DATA_DIR = str(pathlib.Path(PACKAGE_ROOT).joinpath("data"))
-
-pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="test path broken on windows")
 
 
 class TestPersistenceParsers:
     def setup(self):
         data_catalog_setup()
-        self.catalog = DataCatalog.from_env()
+        self.catalog = ParquetDataCatalog.from_env()
         self.reader = MockReader()
         self.line_preprocessor = TestLineProcessor()
 
@@ -62,7 +58,7 @@ class TestPersistenceParsers:
         assert data == {"ts_init": 1624946651943000000}
 
     def test_line_preprocessor_post_process(self):
-        obj = TestStubs.trade_tick_5decimal()
+        obj = TestDataStubs.trade_tick_5decimal()
         data = {
             "ts_init": int(pd.Timestamp("2021-06-29T06:04:11.943000", tz="UTC").to_datetime64())
         }
@@ -75,7 +71,7 @@ class TestPersistenceParsers:
                 ts, line = raw.split(b" - ")
                 state = {"ts_init": int(pd.Timestamp(ts.decode(), tz="UTC").to_datetime64())}
                 line = line.strip().replace(b"b'", b"")
-                orjson.loads(line)
+                msgspec.json.decode(line)
                 for obj in BetfairTestStubs.parse_betfair(
                     line, instrument_provider=instrument_provider
                 ):
@@ -117,7 +113,7 @@ class TestPersistenceParsers:
                 AssetClass,
                 USDT,
                 BTC,
-                CurrencySpot,
+                CurrencyPair,
                 InstrumentId,
                 Symbol,
                 Venue,
@@ -127,7 +123,7 @@ class TestPersistenceParsers:
 
             # Replace str repr with "fully qualified" string we can `eval`
             replacements = {
-                b"id=BTC/USDT.BINANCE": b"instrument_id=InstrumentId(Symbol('BTC/USDT'), venue=Venue('BINANCE'))",
+                b"id=BTCUSDT.BINANCE": b"instrument_id=InstrumentId(Symbol('BTCUSDT'), venue=Venue('BINANCE'))",
                 b"native_symbol=BTCUSDT": b"native_symbol=Symbol('BTCUSDT')",
                 b"price_increment=0.01": b"price_increment=Price.from_str('0.01')",
                 b"size_increment=0.000001": b"size_increment=Quantity.from_str('0.000001')",
@@ -163,7 +159,7 @@ class TestPersistenceParsers:
         assert result == 100000
 
     def test_csv_reader_headerless_dataframe(self):
-        bar_type = TestStubs.bartype_adabtc_binance_1min_last()
+        bar_type = TestDataStubs.bartype_adabtc_binance_1min_last()
         instrument = TestInstrumentProvider.adabtc_binance()
         wrangler = BarDataWrangler(bar_type, instrument)
 
@@ -194,6 +190,38 @@ class TestPersistenceParsers:
         )
         assert sum(in_.values()) == 21
 
+    def test_csv_reader_dataframe_separator(self):
+        bar_type = TestDataStubs.bartype_adabtc_binance_1min_last()
+        instrument = TestInstrumentProvider.adabtc_binance()
+        wrangler = BarDataWrangler(bar_type, instrument)
+
+        def parser(data):
+            data["timestamp"] = data["timestamp"].astype("datetime64[ms]")
+            bars = wrangler.process(data.set_index("timestamp"))
+            return bars
+
+        binance_spot_header = [
+            "timestamp",
+            "open",
+            "high",
+            "low",
+            "close",
+            "volume",
+            "ts_close",
+            "quote_volume",
+            "n_trades",
+            "taker_buy_base_volume",
+            "taker_buy_quote_volume",
+            "ignore",
+        ]
+        reader = CSVReader(block_parser=parser, header=binance_spot_header, separator="|")
+        in_ = process_files(
+            glob_path=f"{TEST_DATA_DIR}/ADABTC_pipe_separated-1m-2021-11-*.csv",
+            reader=reader,
+            catalog=self.catalog,
+        )
+        assert sum(in_.values()) == 10
+
     def test_text_reader(self):
         provider = BetfairInstrumentProvider.from_instruments([])
         reader = BetfairTestStubs.betfair_reader(provider)  # type: TextReader
@@ -203,8 +231,8 @@ class TestPersistenceParsers:
 
     def test_byte_json_parser(self):
         def parser(block):
-            for data in orjson.loads(block):
-                obj = CurrencySpot.from_dict(data)
+            for data in msgspec.json.decode(block):
+                obj = CurrencyPair.from_dict(data)
                 yield obj
 
         reader = ByteReader(block_parser=parser)

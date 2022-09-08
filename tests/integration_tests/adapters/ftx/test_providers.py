@@ -16,7 +16,7 @@
 import pkgutil
 from typing import Any, Dict
 
-import orjson
+import msgspec
 import pytest
 
 from nautilus_trader.adapters.ftx.http.client import FTXHttpClient
@@ -36,12 +36,12 @@ class TestFTXInstrumentProvider:
     ):
         # Arrange: prepare data for monkey patch
         response1 = pkgutil.get_data(
-            package="tests.integration_tests.adapters.ftx.resources.responses",
+            package="tests.integration_tests.adapters.ftx.resources.http_responses",
             resource="account_info.json",
         )
 
         response2 = pkgutil.get_data(
-            package="tests.integration_tests.adapters.ftx.resources.responses",
+            package="tests.integration_tests.adapters.ftx.resources.http_responses",
             resource="markets.json",
         )
 
@@ -54,8 +54,9 @@ class TestFTXInstrumentProvider:
             url_path: str,  # noqa (needed for mock)
             headers: Dict[str, Any] = None,  # noqa (needed for mock)
             payload: Dict[str, str] = None,  # noqa (needed for mock)
+            params: Dict[str, str] = None,  # noqa (needed for mock)
         ) -> bytes:
-            return orjson.loads(responses.pop())
+            return msgspec.json.decode(responses.pop())
 
         # Apply mock coroutine to client
         monkeypatch.setattr(

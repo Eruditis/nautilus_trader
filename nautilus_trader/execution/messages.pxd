@@ -13,86 +13,106 @@
 #  limitations under the License.
 # -------------------------------------------------------------------------------------------------
 
-from libc.stdint cimport int64_t
-
-from nautilus_trader.model.c_enums.liquidity_side cimport LiquiditySide
-from nautilus_trader.model.c_enums.order_status cimport OrderStatus
-from nautilus_trader.model.c_enums.position_side cimport PositionSide
-from nautilus_trader.model.identifiers cimport AccountId
+from nautilus_trader.core.message cimport Command
 from nautilus_trader.model.identifiers cimport ClientId
 from nautilus_trader.model.identifiers cimport ClientOrderId
-from nautilus_trader.model.identifiers cimport ExecutionId
 from nautilus_trader.model.identifiers cimport InstrumentId
 from nautilus_trader.model.identifiers cimport PositionId
+from nautilus_trader.model.identifiers cimport StrategyId
+from nautilus_trader.model.identifiers cimport TraderId
 from nautilus_trader.model.identifiers cimport VenueOrderId
-from nautilus_trader.model.objects cimport Money
 from nautilus_trader.model.objects cimport Price
 from nautilus_trader.model.objects cimport Quantity
+from nautilus_trader.model.orders.base cimport Order
+from nautilus_trader.model.orders.list cimport OrderList
 
 
-cdef class OrderStatusReport:
-    cdef readonly ClientOrderId client_order_id
-    """The client order ID for the report.\n\n:returns: `ClientOrderId`"""
-    cdef readonly VenueOrderId venue_order_id
-    """The reported venue order ID.\n\n:returns: `VenueOrderId`"""
-    cdef readonly OrderStatus order_status
-    """The reported order status at the exchange.\n\n:returns: `OrderStatus`"""
-    cdef readonly Quantity filled_qty
-    """The reported filled quantity.\n\n:returns: `Quantity`"""
-    cdef readonly int64_t ts_init
-    """The UNIX timestamp (nanoseconds) when the object was initialized.\n\n:returns: `int64`"""
-
-
-cdef class PositionStatusReport:
-    cdef readonly InstrumentId instrument_id
-    """The reported instrument ID.\n\n:returns: `InstrumentId`"""
-    cdef readonly PositionSide side
-    """The reported position side at the exchange.\n\n:returns: `PositionSide`"""
-    cdef readonly Quantity qty
-    """The reported position quantity at the exchange.\n\n:returns: `Quantity`"""
-    cdef readonly int64_t ts_init
-    """The UNIX timestamp (nanoseconds) when the object was initialized.\n\n:returns: `int64`"""
-
-
-cdef class ExecutionReport:
-    cdef readonly ClientOrderId client_order_id
-    """The client order ID for the report.\n\n:returns: `ClientOrderId`"""
-    cdef readonly VenueOrderId venue_order_id
-    """The reported venue order ID.\n\n:returns: `VenueOrderId`"""
-    cdef readonly PositionId venue_position_id
-    """The reported venue position ID.\n\n:returns: `PositionId` or ``None``"""
-    cdef readonly ExecutionId id
-    """The reported execution ID.\n\n:returns: `ExecutionId`"""
-    cdef readonly Quantity last_qty
-    """The reported quantity of the last fill.\n\n:returns: `Quantity`"""
-    cdef readonly Price last_px
-    """The reported price of the last fill.\n\n:returns: `Price`"""
-    cdef readonly Money commission
-    """The reported commission.\n\n:returns: `Money`"""
-    cdef readonly LiquiditySide liquidity_side
-    """The reported liquidity side.\n\n:returns: `LiquiditySide`"""
-    cdef readonly int64_t ts_event
-    """The UNIX timestamp (nanoseconds) when the execution event occurred.\n\n:returns: `LiquiditySide`"""
-    cdef readonly int64_t ts_init
-    """The UNIX timestamp (nanoseconds) when the object was initialized.\n\n:returns: `int64`"""
-
-
-cdef class ExecutionMassStatus:
-    cdef dict _order_reports
-    cdef dict _exec_reports
-    cdef dict _position_reports
-
+cdef class TradingCommand(Command):
     cdef readonly ClientId client_id
-    """The client ID for the report.\n\n:returns: `ClientId`"""
-    cdef readonly AccountId account_id
-    """The account ID for the report.\n\n:returns: `AccountId`"""
-    cdef readonly int64_t ts_init
-    """The UNIX timestamp (nanoseconds) when the object was initialized.\n\n:returns: `int64`"""
+    """The execution client ID for the command.\n\n:returns: `ClientId` or ``None``"""
+    cdef readonly TraderId trader_id
+    """The trader ID associated with the command.\n\n:returns: `TraderId`"""
+    cdef readonly StrategyId strategy_id
+    """The strategy ID associated with the command.\n\n:returns: `StrategyId`"""
+    cdef readonly InstrumentId instrument_id
+    """The instrument ID associated with the command.\n\n:returns: `InstrumentId`"""
 
-    cpdef dict order_reports(self)
-    cpdef dict exec_reports(self)
-    cpdef dict position_reports(self)
 
-    cpdef void add_order_report(self, OrderStatusReport report) except *
-    cpdef void add_exec_reports(self, VenueOrderId venue_order_id, list reports) except *
-    cpdef void add_position_report(self, PositionStatusReport report) except *
+cdef class SubmitOrder(TradingCommand):
+    cdef readonly PositionId position_id
+    """The position ID associated with the command.\n\n:returns: `PositionId` or ``None``"""
+    cdef readonly check_position_exists
+    """If a position is checked to exist for any given position ID.\n\n:returns: `bool`"""
+    cdef readonly Order order
+    """The order for the command.\n\n:returns: `Order`"""
+
+    @staticmethod
+    cdef SubmitOrder from_dict_c(dict values)
+
+    @staticmethod
+    cdef dict to_dict_c(SubmitOrder obj)
+
+
+cdef class SubmitOrderList(TradingCommand):
+    cdef readonly OrderList list
+    """The order list for submission.\n\n:returns: `OrderList`"""
+
+    @staticmethod
+    cdef SubmitOrderList from_dict_c(dict values)
+
+    @staticmethod
+    cdef dict to_dict_c(SubmitOrderList obj)
+
+
+cdef class ModifyOrder(TradingCommand):
+    cdef readonly ClientOrderId client_order_id
+    """The client order ID associated with the command.\n\n:returns: `ClientOrderId`"""
+    cdef readonly VenueOrderId venue_order_id
+    """The venue order ID associated with the command.\n\n:returns: `VenueOrderId` or ``None``"""
+    cdef readonly Quantity quantity
+    """The updated quantity for the command.\n\n:returns: `Quantity` or ``None``"""
+    cdef readonly Price price
+    """The updated price for the command.\n\n:returns: `Price` or ``None``"""
+    cdef readonly Price trigger_price
+    """The updated trigger price for the command.\n\n:returns: `Price` or ``None``"""
+
+    @staticmethod
+    cdef ModifyOrder from_dict_c(dict values)
+
+    @staticmethod
+    cdef dict to_dict_c(ModifyOrder obj)
+
+
+cdef class CancelOrder(TradingCommand):
+    cdef readonly ClientOrderId client_order_id
+    """The client order ID associated with the command.\n\n:returns: `ClientOrderId`"""
+    cdef readonly VenueOrderId venue_order_id
+    """The venue order ID associated with the command.\n\n:returns: `VenueOrderId` or ``None``"""
+
+    @staticmethod
+    cdef CancelOrder from_dict_c(dict values)
+
+    @staticmethod
+    cdef dict to_dict_c(CancelOrder obj)
+
+
+cdef class CancelAllOrders(TradingCommand):
+
+    @staticmethod
+    cdef CancelAllOrders from_dict_c(dict values)
+
+    @staticmethod
+    cdef dict to_dict_c(CancelAllOrders obj)
+
+
+cdef class QueryOrder(TradingCommand):
+    cdef readonly ClientOrderId client_order_id
+    """The client order ID associated with the command.\n\n:returns: `ClientOrderId`"""
+    cdef readonly VenueOrderId venue_order_id
+    """The venue order ID associated with the command.\n\n:returns: `VenueOrderId` or ``None``"""
+
+    @staticmethod
+    cdef QueryOrder from_dict_c(dict values)
+
+    @staticmethod
+    cdef dict to_dict_c(QueryOrder obj)

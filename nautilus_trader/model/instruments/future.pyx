@@ -14,7 +14,7 @@
 # -------------------------------------------------------------------------------------------------
 
 from cpython.datetime cimport date
-from libc.stdint cimport int64_t
+from libc.stdint cimport uint64_t
 
 from decimal import Decimal
 
@@ -32,14 +32,14 @@ from nautilus_trader.model.objects cimport Quantity
 
 cdef class Future(Instrument):
     """
-    Represents a futures contract instrument.
+    Represents a generic deliverable Futures Contract instrument.
 
     Parameters
     ----------
     instrument_id : InstrumentId
         The instrument ID.
     native_symbol : Symbol
-        The local/native symbol on the exchange for the instrument.
+        The native/local symbol on the exchange for the instrument.
     asset_class : AssetClass
         The futures contract asset class.
     currency : Currency
@@ -56,9 +56,9 @@ cdef class Future(Instrument):
         The underlying asset.
     expiry_date : date
         The contract expiry date.
-    ts_event: int64
+    ts_event : uint64_t
         The UNIX timestamp (nanoseconds) when the data event occurred.
-    ts_init: int64
+    ts_init : uint64_t
         The UNIX timestamp (nanoseconds) when the data object was initialized.
 
     Raises
@@ -85,8 +85,8 @@ cdef class Future(Instrument):
         Quantity lot_size not None,
         str underlying,
         date expiry_date,
-        int64_t ts_event,
-        int64_t ts_init,
+        uint64_t ts_event,
+        uint64_t ts_init,
     ):
         super().__init__(
             instrument_id=instrument_id,
@@ -140,9 +140,9 @@ cdef class Future(Instrument):
     cdef dict to_dict_c(Future obj):
         Condition.not_none(obj, "obj")
         return {
-            "type": "Equity",
-            "id": obj.id.value,
-            "native_symbol": obj.native_symbol.value,
+            "type": "Future",
+            "id": obj.id.to_str(),
+            "native_symbol": obj.native_symbol.to_str(),
             "asset_class": AssetClassParser.to_str(obj.asset_class),
             "currency": obj.quote_currency.code,
             "price_precision": obj.price_precision,
@@ -174,7 +174,7 @@ cdef class Future(Instrument):
         Instrument
 
         """
-        return Instrument.from_dict_c(values)
+        return Future.from_dict_c(values)
 
     @staticmethod
     def to_dict(Instrument obj):
@@ -186,4 +186,4 @@ cdef class Future(Instrument):
         dict[str, object]
 
         """
-        return Instrument.to_dict_c(obj)
+        return Future.to_dict_c(obj)

@@ -19,27 +19,27 @@ import sys
 import pytest
 
 from nautilus_trader.network.http import HttpClient
-from tests.test_kit.stubs import TestStubs
+from tests.test_kit.stubs.component import TestComponentStubs
 
 
 @pytest.fixture()
 async def client():
     client = HttpClient(
         loop=asyncio.get_event_loop(),
-        logger=TestStubs.logger(),
+        logger=TestComponentStubs.logger(),
     )
     await client.connect()
     return client
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="failing on windows")
+@pytest.mark.skipif(sys.platform == "win32", reason="failing on Windows")
 @pytest.mark.asyncio
 async def test_client_get(client):
     resp = await client.get("https://httpbin.org/get")
     assert len(resp.data) > 100
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="failing on windows")
+@pytest.mark.skipif(sys.platform == "win32", reason="failing on Windows")
 @pytest.mark.asyncio
 async def test_client_post(client):
     resp = await client.post("https://httpbin.org/post")

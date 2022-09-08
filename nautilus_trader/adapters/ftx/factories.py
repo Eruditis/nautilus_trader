@@ -16,9 +16,10 @@
 import asyncio
 import os
 from functools import lru_cache
-from typing import Any, Dict, Optional
+from typing import Dict, Optional
 
-from nautilus_trader.adapters.ftx.common import FTX_VENUE
+from nautilus_trader.adapters.ftx.config import FTXDataClientConfig
+from nautilus_trader.adapters.ftx.config import FTXExecClientConfig
 from nautilus_trader.adapters.ftx.data import FTXDataClient
 from nautilus_trader.adapters.ftx.execution import FTXExecutionClient
 from nautilus_trader.adapters.ftx.http.client import FTXHttpClient
@@ -27,9 +28,9 @@ from nautilus_trader.cache.cache import Cache
 from nautilus_trader.common.clock import LiveClock
 from nautilus_trader.common.logging import LiveLogger
 from nautilus_trader.common.logging import Logger
+from nautilus_trader.config import InstrumentProviderConfig
 from nautilus_trader.live.factories import LiveDataClientFactory
-from nautilus_trader.live.factories import LiveExecutionClientFactory
-from nautilus_trader.model.identifiers import AccountId
+from nautilus_trader.live.factories import LiveExecClientFactory
 from nautilus_trader.msgbus.bus import MessageBus
 
 
@@ -37,11 +38,13 @@ HTTP_CLIENTS: Dict[str, FTXHttpClient] = {}
 
 
 def get_cached_ftx_http_client(
-    key: Optional[str],
-    secret: Optional[str],
     loop: asyncio.AbstractEventLoop,
     clock: LiveClock,
     logger: Logger,
+    key: Optional[str] = None,
+    secret: Optional[str] = None,
+    subaccount: Optional[str] = None,
+    us: bool = False,
 ) -> FTXHttpClient:
     """
     Cache and return a FTX HTTP client with the given key or secret.
@@ -51,18 +54,23 @@ def get_cached_ftx_http_client(
 
     Parameters
     ----------
-    key : str, optional
-        The API key for the client.
-        If None then will source from the `FTX_API_KEY` env var.
-    secret : str, optional
-        The API secret for the client.
-        If None then will source from the `FTX_API_SECRET` env var.
     loop : asyncio.AbstractEventLoop
         The event loop for the client.
     clock : LiveClock
         The clock for the client.
     logger : Logger
         The logger for the client.
+    key : str, optional
+        The API key for the client.
+        If None then will source from the `FTX_API_KEY` env var.
+    secret : str, optional
+        The API secret for the client.
+        If None then will source from the `FTX_API_SECRET` env var.
+    subaccount : str, optional
+        The subaccount name.
+        If None then will source from the `FTX_SUBACCOUNT` env var.
+    us : bool, default False
+        If the client is for FTX US.
 
     Returns
     -------
@@ -73,8 +81,9 @@ def get_cached_ftx_http_client(
 
     key = key or os.environ["FTX_API_KEY"]
     secret = secret or os.environ["FTX_API_SECRET"]
+    subaccount = subaccount or os.environ.get("FTX_SUBACCOUNT")
 
-    client_key: str = "|".join((key, secret))
+    client_key: str = "|".join((key, secret, subaccount or "None"))
     if client_key not in HTTP_CLIENTS:
         client = FTXHttpClient(
             loop=loop,
@@ -82,6 +91,8 @@ def get_cached_ftx_http_client(
             logger=logger,
             key=key,
             secret=secret,
+            subaccount=subaccount,
+            us=us,
         )
         HTTP_CLIENTS[client_key] = client
     return HTTP_CLIENTS[client_key]
@@ -91,11 +102,13 @@ def get_cached_ftx_http_client(
 def get_cached_ftx_instrument_provider(
     client: FTXHttpClient,
     logger: Logger,
+    config: InstrumentProviderConfig,
+    override_usd: bool = False,
 ) -> FTXInstrumentProvider:
     """
     Cache and return an FTXInstrumentProvider.
 
-    If a cached provider already exists, then that cached provider will be returned.
+    If a cached provider already exists, then that provider will be returned.
 
     Parameters
     ----------
@@ -103,6 +116,11 @@ def get_cached_ftx_instrument_provider(
         The client for the instrument provider.
     logger : Logger
         The logger for the instrument provider.
+    config : InstrumentProviderConfig
+        The configuration for the instrument provider.
+    override_usd : bool, default False
+        If the built-in USD currency should be overridden with the FTX version
+        which uses a precision of 8.
 
     Returns
     -------
@@ -112,6 +130,8 @@ def get_cached_ftx_instrument_provider(
     return FTXInstrumentProvider(
         client=client,
         logger=logger,
+        config=config,
+        override_usd=override_usd,
     )
 
 
@@ -124,7 +144,7 @@ class FTXLiveDataClientFactory(LiveDataClientFactory):
     def create(
         loop: asyncio.AbstractEventLoop,
         name: str,
-        config: Dict[str, Any],
+        config: FTXDataClientConfig,
         msgbus: MessageBus,
         cache: Cache,
         clock: LiveClock,
@@ -139,8 +159,8 @@ class FTXLiveDataClientFactory(LiveDataClientFactory):
             The event loop for the client.
         name : str
             The client name.
-        config : dict
-            The configuration dictionary.
+        config : FTXDataClientConfig
+            The client configuration.
         msgbus : MessageBus
             The message bus for the client.
         cache : Cache
@@ -156,15 +176,22 @@ class FTXLiveDataClientFactory(LiveDataClientFactory):
 
         """
         client = get_cached_ftx_http_client(
-            key=config.get("api_key"),
-            secret=config.get("api_secret"),
             loop=loop,
             clock=clock,
             logger=logger,
+            key=config.api_key,
+            secret=config.api_secret,
+            subaccount=config.subaccount,
+            us=config.us,
         )
 
         # Get instrument provider singleton
-        provider = get_cached_ftx_instrument_provider(client=client, logger=logger)
+        provider = get_cached_ftx_instrument_provider(
+            client=client,
+            logger=logger,
+            config=config.instrument_provider,
+            override_usd=config.override_usd,
+        )
 
         # Create client
         data_client = FTXDataClient(
@@ -175,11 +202,12 @@ class FTXLiveDataClientFactory(LiveDataClientFactory):
             clock=clock,
             logger=logger,
             instrument_provider=provider,
+            us=config.us,
         )
         return data_client
 
 
-class FTXLiveExecutionClientFactory(LiveExecutionClientFactory):
+class FTXLiveExecClientFactory(LiveExecClientFactory):
     """
     Provides an `FTX` live execution client factory.
     """
@@ -188,7 +216,7 @@ class FTXLiveExecutionClientFactory(LiveExecutionClientFactory):
     def create(
         loop: asyncio.AbstractEventLoop,
         name: str,
-        config: Dict[str, Any],
+        config: FTXExecClientConfig,
         msgbus: MessageBus,
         cache: Cache,
         clock: LiveClock,
@@ -203,8 +231,8 @@ class FTXLiveExecutionClientFactory(LiveExecutionClientFactory):
             The event loop for the client.
         name : str
             The client name.
-        config : dict[str, object]
-            The configuration for the client.
+        config : FTXExecClientConfig
+            The client configuration.
         msgbus : MessageBus
             The message bus for the client.
         cache : Cache
@@ -220,31 +248,34 @@ class FTXLiveExecutionClientFactory(LiveExecutionClientFactory):
 
         """
         client = get_cached_ftx_http_client(
-            key=config.get("api_key"),
-            secret=config.get("api_secret"),
             loop=loop,
             clock=clock,
             logger=logger,
+            key=config.api_key,
+            secret=config.api_secret,
+            subaccount=config.subaccount,
+            us=config.us,
         )
 
         # Get instrument provider singleton
-        provider = get_cached_ftx_instrument_provider(client=client, logger=logger)
-
-        # Get account ID env variable or set default
-        account_id_env_var = os.getenv(config.get("account_id", ""), "001")
-
-        # Set account ID
-        account_id = AccountId(FTX_VENUE.value, account_id_env_var)
+        provider = get_cached_ftx_instrument_provider(
+            client=client,
+            logger=logger,
+            config=config.instrument_provider,
+            override_usd=config.override_usd,
+        )
 
         # Create client
         exec_client = FTXExecutionClient(
             loop=loop,
             client=client,
-            account_id=account_id,
             msgbus=msgbus,
             cache=cache,
             clock=clock,
             logger=logger,
             instrument_provider=provider,
+            us=config.us,
+            account_polling_interval=config.account_polling_interval,
+            calculated_account=config.calculated_account,
         )
         return exec_client

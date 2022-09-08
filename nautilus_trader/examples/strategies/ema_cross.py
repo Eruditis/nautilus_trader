@@ -17,6 +17,7 @@ from decimal import Decimal
 from typing import Dict, Optional
 
 from nautilus_trader.common.logging import LogColor
+from nautilus_trader.config import StrategyConfig
 from nautilus_trader.core.data import Data
 from nautilus_trader.core.message import Event
 from nautilus_trader.indicators.average.ema import ExponentialMovingAverage
@@ -31,18 +32,19 @@ from nautilus_trader.model.instruments.base import Instrument
 from nautilus_trader.model.orderbook.book import OrderBook
 from nautilus_trader.model.orderbook.data import OrderBookData
 from nautilus_trader.model.orders.market import MarketOrder
-from nautilus_trader.trading.strategy import TradingStrategy
-from nautilus_trader.trading.strategy import TradingStrategyConfig
+from nautilus_trader.trading.strategy import Strategy
 
 
 # *** THIS IS A TEST STRATEGY WITH NO ALPHA ADVANTAGE WHATSOEVER. ***
 # *** IT IS NOT INTENDED TO BE USED TO TRADE LIVE WITH REAL MONEY. ***
 
 
-class EMACrossConfig(TradingStrategyConfig):
+class EMACrossConfig(StrategyConfig):
     """
     Configuration for ``EMACross`` instances.
 
+    Parameters
+    ----------
     instrument_id : InstrumentId
         The instrument ID for the strategy.
     bar_type : BarType
@@ -68,14 +70,14 @@ class EMACrossConfig(TradingStrategyConfig):
     trade_size: Decimal
 
 
-class EMACross(TradingStrategy):
+class EMACross(Strategy):
     """
     A simple moving average cross example strategy.
 
     When the fast EMA crosses the slow EMA then enter a position at the market
     in that direction.
 
-    Cancels all orders and flattens all positions on stop.
+    Cancels all orders and closes all positions on stop.
 
     Parameters
     ----------
@@ -117,7 +119,7 @@ class EMACross(TradingStrategy):
         # Subscribe to live data
         self.subscribe_bars(self.bar_type)
         self.subscribe_quote_ticks(self.instrument_id)
-        self.subscribe_trade_ticks(self.instrument_id)
+        # self.subscribe_trade_ticks(self.instrument_id)
         # self.subscribe_ticker(self.instrument_id)  # For debugging
         # self.subscribe_order_book_deltas(self.instrument_id, depth=20)  # For debugging
         # self.subscribe_order_book_snapshots(self.instrument_id, depth=20)  # For debugging
@@ -133,6 +135,8 @@ class EMACross(TradingStrategy):
             The instrument received.
 
         """
+        # For debugging (must add a subscription)
+        # self.log.info(repr(instrument), LogColor.CYAN)
         pass
 
     def on_order_book_delta(self, data: OrderBookData):
@@ -145,7 +149,9 @@ class EMACross(TradingStrategy):
             The order book data received.
 
         """
-        self.log.info(f"Received {repr(data)}")  # For debugging (must add a subscription)
+        # For debugging (must add a subscription)
+        # self.log.info(repr(data), LogColor.CYAN)
+        pass
 
     def on_order_book(self, order_book: OrderBook):
         """
@@ -157,9 +163,9 @@ class EMACross(TradingStrategy):
             The order book received.
 
         """
-        self.log.info(f"Received {repr(order_book)}")  # For debugging (must add a subscription)
-        self.log.info(f"Bid count = {len(order_book.bids.levels)}")
-        self.log.info(f"Ask count = {len(order_book.asks.levels)}")
+        # For debugging (must add a subscription)
+        # self.log.info(repr(order_book), LogColor.CYAN)
+        pass
 
     def on_ticker(self, ticker: Ticker):
         """
@@ -171,7 +177,9 @@ class EMACross(TradingStrategy):
             The ticker received.
 
         """
-        self.log.info(f"Received {repr(ticker)}")  # For debugging (must add a subscription)
+        # For debugging (must add a subscription)
+        # self.log.info(repr(ticker), LogColor.CYAN)
+        pass
 
     def on_quote_tick(self, tick: QuoteTick):
         """
@@ -180,10 +188,12 @@ class EMACross(TradingStrategy):
         Parameters
         ----------
         tick : QuoteTick
-            The quote tick received.
+            The tick received.
 
         """
-        # self.log.info(f"Received {repr(tick)}")  # For debugging (must add a subscription)
+        # For debugging (must add a subscription)
+        # self.log.info(repr(tick), LogColor.CYAN)
+        pass
 
     def on_trade_tick(self, tick: TradeTick):
         """
@@ -195,7 +205,9 @@ class EMACross(TradingStrategy):
             The tick received.
 
         """
-        self.log.info(f"Received {repr(tick)}")  # For debugging (must add a subscription)
+        # For debugging (must add a subscription)
+        # self.log.info(repr(tick), LogColor.CYAN)
+        pass
 
     def on_bar(self, bar: Bar):
         """
@@ -207,7 +219,7 @@ class EMACross(TradingStrategy):
             The bar received.
 
         """
-        self.log.info(f"Received {repr(bar)}")
+        self.log.info(repr(bar), LogColor.CYAN)
 
         # Check if indicators ready
         if not self.indicators_initialized():
@@ -217,20 +229,23 @@ class EMACross(TradingStrategy):
             )
             return  # Wait for indicators to warm up...
 
+        if bar.is_single_price():
+            # Implies no market information for this bar
+            return
+
         # BUY LOGIC
         if self.fast_ema.value >= self.slow_ema.value:
             if self.portfolio.is_flat(self.instrument_id):
                 self.buy()
             elif self.portfolio.is_net_short(self.instrument_id):
-                self.flatten_all_positions(self.instrument_id)
+                self.close_all_positions(self.instrument_id)
                 self.buy()
-
         # SELL LOGIC
         elif self.fast_ema.value < self.slow_ema.value:
             if self.portfolio.is_flat(self.instrument_id):
                 self.sell()
             elif self.portfolio.is_net_long(self.instrument_id):
-                self.flatten_all_positions(self.instrument_id)
+                self.close_all_positions(self.instrument_id)
                 self.sell()
 
     def buy(self):
@@ -288,12 +303,12 @@ class EMACross(TradingStrategy):
         Actions to be performed when the strategy is stopped.
         """
         self.cancel_all_orders(self.instrument_id)
-        self.flatten_all_positions(self.instrument_id)
+        self.close_all_positions(self.instrument_id)
 
         # Unsubscribe from data
         self.unsubscribe_bars(self.bar_type)
-        self.unsubscribe_quote_ticks(self.instrument_id)
-        self.unsubscribe_trade_ticks(self.instrument_id)
+        # self.unsubscribe_quote_ticks(self.instrument_id)
+        # self.unsubscribe_trade_ticks(self.instrument_id)
         # self.unsubscribe_ticker(self.instrument_id)
         # self.unsubscribe_order_book_deltas(self.instrument_id)
         # self.unsubscribe_order_book_snapshots(self.instrument_id)

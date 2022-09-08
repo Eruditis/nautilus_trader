@@ -21,14 +21,18 @@ could also be possible to write clients for specialized data publishers.
 
 import asyncio
 import types
+from typing import Optional
+
+from nautilus_trader.common.providers import InstrumentProvider
 
 from nautilus_trader.cache.cache cimport Cache
 from nautilus_trader.common.clock cimport LiveClock
 from nautilus_trader.common.logging cimport Logger
-from nautilus_trader.common.providers cimport InstrumentProvider
+from nautilus_trader.core.correctness cimport Condition
 from nautilus_trader.data.client cimport DataClient
 from nautilus_trader.data.client cimport MarketDataClient
 from nautilus_trader.model.identifiers cimport ClientId
+from nautilus_trader.model.identifiers cimport Venue
 from nautilus_trader.msgbus.bus cimport MessageBus
 
 
@@ -42,6 +46,8 @@ cdef class LiveDataClient(DataClient):
         The event loop for the client.
     client_id : ClientId
         The client ID.
+    venue : Venue, optional
+        The client venue. If multi-venue then can be ``None``.
     msgbus : MessageBus
         The message bus for the client.
     cache : Cache
@@ -62,6 +68,7 @@ cdef class LiveDataClient(DataClient):
         self,
         loop not None: asyncio.AbstractEventLoop,
         ClientId client_id not None,
+        Venue venue: Optional[Venue],
         MessageBus msgbus not None,
         Cache cache not None,
         LiveClock clock not None,
@@ -70,6 +77,7 @@ cdef class LiveDataClient(DataClient):
     ):
         super().__init__(
             client_id=client_id,
+            venue=venue,
             msgbus=msgbus,
             cache=cache,
             clock=clock,
@@ -79,16 +87,16 @@ cdef class LiveDataClient(DataClient):
 
         self._loop = loop
 
-    def connect(self):
-        """Abstract method (implement in subclass)."""
+    def connect(self) -> None:
+        """Connect the client."""
         raise NotImplementedError("method must be implemented in the subclass")  # pragma: no cover
 
-    def disconnect(self):
-        """Abstract method (implement in subclass)."""
+    def disconnect(self) -> None:
+        """Disconnect the client."""
         raise NotImplementedError("method must be implemented in the subclass")  # pragma: no cover
 
     @types.coroutine
-    def sleep0(self):
+    def sleep0(self) -> None:
         # Skip one event loop run cycle.
         #
         # This is equivalent to `asyncio.sleep(0)` however avoids the overhead
@@ -98,7 +106,7 @@ cdef class LiveDataClient(DataClient):
         # instead of creating a Future object.
         yield
 
-    async def run_after_delay(self, delay, coro):
+    async def run_after_delay(self, delay: float, coro) -> None:
         await asyncio.sleep(delay)
         return await coro
 
@@ -113,6 +121,8 @@ cdef class LiveMarketDataClient(MarketDataClient):
         The event loop for the client.
     client_id : ClientId
         The client ID.
+    venue : Venue, optional
+        The client venue. If multi-venue then can be ``None``.
     instrument_provider : InstrumentProvider
         The instrument provider for the client.
     msgbus : MessageBus
@@ -135,15 +145,19 @@ cdef class LiveMarketDataClient(MarketDataClient):
         self,
         loop not None: asyncio.AbstractEventLoop,
         ClientId client_id not None,
-        InstrumentProvider instrument_provider not None,
+        Venue venue: Optional[Venue],
+        instrument_provider not None: InstrumentProvider,
         MessageBus msgbus not None,
         Cache cache not None,
         LiveClock clock not None,
         Logger logger not None,
         dict config=None,
     ):
+        Condition.type(instrument_provider, InstrumentProvider, "instrument_provider")
+
         super().__init__(
             client_id=client_id,
+            venue=venue,
             msgbus=msgbus,
             cache=cache,
             clock=clock,
@@ -154,16 +168,16 @@ cdef class LiveMarketDataClient(MarketDataClient):
         self._loop = loop
         self._instrument_provider = instrument_provider
 
-    def connect(self):
-        """Abstract method (implement in subclass)."""
+    def connect(self) -> None:
+        """Connect the client."""
         raise NotImplementedError("method must be implemented in the subclass")  # pragma: no cover
 
-    def disconnect(self):
-        """Abstract method (implement in subclass)."""
+    def disconnect(self) -> None:
+        """Disconnect the client."""
         raise NotImplementedError("method must be implemented in the subclass")  # pragma: no cover
 
     @types.coroutine
-    def sleep0(self):
+    def sleep0(self) -> None:
         # Skip one event loop run cycle.
         #
         # This is equivalent to `asyncio.sleep(0)` however avoids the overhead
@@ -173,6 +187,6 @@ cdef class LiveMarketDataClient(MarketDataClient):
         # instead of creating a Future object.
         yield
 
-    async def run_after_delay(self, delay, coro):
+    async def run_after_delay(self, delay, coro) -> None:
         await asyncio.sleep(delay)
         return await coro

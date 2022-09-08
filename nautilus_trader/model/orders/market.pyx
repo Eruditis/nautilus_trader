@@ -13,9 +13,7 @@
 #  limitations under the License.
 # -------------------------------------------------------------------------------------------------
 
-from decimal import Decimal
-
-from libc.stdint cimport int64_t
+from libc.stdint cimport uint64_t
 
 from nautilus_trader.core.correctness cimport Condition
 from nautilus_trader.core.uuid cimport UUID4
@@ -27,9 +25,7 @@ from nautilus_trader.model.c_enums.order_type cimport OrderType
 from nautilus_trader.model.c_enums.order_type cimport OrderTypeParser
 from nautilus_trader.model.c_enums.time_in_force cimport TimeInForce
 from nautilus_trader.model.c_enums.time_in_force cimport TimeInForceParser
-from nautilus_trader.model.events.order cimport OrderFilled
 from nautilus_trader.model.events.order cimport OrderInitialized
-from nautilus_trader.model.events.order cimport OrderUpdated
 from nautilus_trader.model.identifiers cimport ClientOrderId
 from nautilus_trader.model.identifiers cimport InstrumentId
 from nautilus_trader.model.identifiers cimport OrderListId
@@ -39,25 +35,12 @@ from nautilus_trader.model.objects cimport Quantity
 from nautilus_trader.model.orders.base cimport Order
 
 
-cdef set _MARKET_ORDER_VALID_TIF = {
-    TimeInForce.GTC,
-    TimeInForce.IOC,
-    TimeInForce.FOK,
-    TimeInForce.FAK,
-    TimeInForce.OC,
-}
-
-
 cdef class MarketOrder(Order):
     """
-    Represents a market order.
+    Represents a `Market` order.
 
-    A market order is an order to buy or sell an instrument immediately. This
-    type of order guarantees that the order will be executed, but does not
-    guarantee the execution price. A market order generally will execute at or
-    near the current bid (for a sell order) or ask (for a buy order) price. The
-    last-traded price is not necessarily the price at which a market order will
-    be executed.
+    - A `Market-On-Open (MOO)` order can be represented using a time in force of ``AT_THE_OPEN``.
+    - A `Market-On-Close (MOC)` order can be represented using a time in force of ``AT_THE_CLOSE``.
 
     Parameters
     ----------
@@ -75,20 +58,20 @@ cdef class MarketOrder(Order):
         The order quantity (> 0).
     init_id : UUID4
         The order initialization event ID.
-    ts_init : int64
+    ts_init : uint64_t
         The UNIX timestamp (nanoseconds) when the object was initialized.
-    reduce_only : bool
+    time_in_force : TimeInForce {``GTC``, ``IOC``, ``FOK``, ``DAY``, ``AT_THE_OPEN``, ``AT_THE_CLOSE``}, default ``GTC``
+        The order time in force.
+    reduce_only : bool, default False
         If the order carries the 'reduce-only' execution instruction.
     order_list_id : OrderListId, optional
         The order list ID associated with the order.
+    contingency_type : ContingencyType, default ``NONE``
+        The order contingency type.
+    linked_order_ids : list[ClientOrderId], optional
+        The order linked client order ID(s).
     parent_order_id : ClientOrderId, optional
         The order parent client order ID.
-    child_order_ids : list[ClientOrderId], optional
-        The order child client order ID(s).
-    contingency : ContingencyType
-        The order contingency type.
-    contingency_ids : list[ClientOrderId], optional
-        The order contingency client order ID(s).
     tags : str, optional
         The custom user tags for the order. These are optional and can
         contain any arbitrary delimiter if required.
@@ -98,7 +81,7 @@ cdef class MarketOrder(Order):
     ValueError
         If `quantity` is not positive (> 0).
     ValueError
-        If `time_in_force` is other than ``GTC``, ``IOC`` or ``FOK``.
+        If `time_in_force` is ``GTD``.
     """
 
     def __init__(
@@ -109,20 +92,19 @@ cdef class MarketOrder(Order):
         ClientOrderId client_order_id not None,
         OrderSide order_side,
         Quantity quantity not None,
-        TimeInForce time_in_force,
         UUID4 init_id not None,
-        int64_t ts_init,
+        uint64_t ts_init,
+        TimeInForce time_in_force=TimeInForce.GTC,
         bint reduce_only=False,
         OrderListId order_list_id=None,
+        ContingencyType contingency_type=ContingencyType.NONE,
+        list linked_order_ids=None,
         ClientOrderId parent_order_id=None,
-        list child_order_ids=None,
-        ContingencyType contingency=ContingencyType.NONE,
-        list contingency_ids=None,
         str tags=None,
     ):
-        Condition.positive(quantity, "quantity")
-        Condition.true(time_in_force in _MARKET_ORDER_VALID_TIF, "time_in_force was != GTC, IOC or FOK")
+        Condition.not_equal(time_in_force, TimeInForce.GTD, "time_in_force", "GTD")
 
+        # Create initialization event
         cdef OrderInitialized init = OrderInitialized(
             trader_id=trader_id,
             strategy_id=strategy_id,
@@ -132,19 +114,39 @@ cdef class MarketOrder(Order):
             order_type=OrderType.MARKET,
             quantity=quantity,
             time_in_force=time_in_force,
+            post_only=False,
             reduce_only=reduce_only,
             options={},
             order_list_id=order_list_id,
+            contingency_type=contingency_type,
+            linked_order_ids=linked_order_ids,
             parent_order_id=parent_order_id,
-            child_order_ids=child_order_ids,
-            contingency=contingency,
-            contingency_ids=contingency_ids,
             tags=tags,
             event_id=init_id,
             ts_init=ts_init,
         )
-
         super().__init__(init=init)
+
+    cdef bint has_price_c(self) except *:
+        return False
+
+    cdef bint has_trigger_price_c(self) except *:
+        return False
+
+    cpdef str info(self):
+        """
+        Return a summary description of the order.
+
+        Returns
+        -------
+        str
+
+        """
+        return (
+            f"{OrderSideParser.to_str(self.side)} {self.quantity.to_str()} {self.instrument_id} "
+            f"{OrderTypeParser.to_str(self.type)} "
+            f"{TimeInForceParser.to_str(self.time_in_force)}"
+        )
 
     cpdef dict to_dict(self):
         """
@@ -155,29 +157,29 @@ cdef class MarketOrder(Order):
         dict[str, object]
 
         """
+        cdef ClientOrderId o
         return {
-            "trader_id": self.trader_id.value,
-            "strategy_id": self.strategy_id.value,
-            "instrument_id": self.instrument_id.value,
-            "client_order_id": self.client_order_id.value,
-            "venue_order_id": self.venue_order_id.value if self.venue_order_id else None,
-            "position_id": self.position_id.value if self.position_id else None,
-            "account_id": self.account_id.value if self.account_id else None,
-            "execution_id": self.execution_id.value if self.execution_id else None,
+            "trader_id": self.trader_id.to_str(),
+            "strategy_id": self.strategy_id.to_str(),
+            "instrument_id": self.instrument_id.to_str(),
+            "client_order_id": self.client_order_id.to_str(),
+            "venue_order_id": self.venue_order_id.to_str() if self.venue_order_id else None,
+            "position_id": self.position_id.to_str() if self.position_id else None,
+            "account_id": self.account_id.to_str() if self.account_id else None,
+            "last_trade_id": self.last_trade_id.to_str() if self.last_trade_id else None,
             "type": OrderTypeParser.to_str(self.type),
             "side": OrderSideParser.to_str(self.side),
             "quantity": str(self.quantity),
             "time_in_force": TimeInForceParser.to_str(self.time_in_force),
             "reduce_only": self.is_reduce_only,
             "filled_qty": str(self.filled_qty),
-            "avg_px": str(self.avg_px) if self.avg_px else None,
+            "avg_px": str(self.avg_px),
             "slippage": str(self.slippage),
             "status": self._fsm.state_string_c(),
-            "order_list_id": self.order_list_id,
-            "parent_order_id": self.parent_order_id,
-            "child_order_ids": ",".join([o.value for o in self.child_order_ids]) if self.child_order_ids is not None else None,  # noqa
-            "contingency": ContingencyTypeParser.to_str(self.contingency),
-            "contingency_ids": ",".join([o.value for o in self.contingency_ids]) if self.contingency_ids is not None else None,  # noqa
+            "order_list_id": self.order_list_id.to_str() if self.order_list_id is not None else None,
+            "contingency_type": ContingencyTypeParser.to_str(self.contingency_type),
+            "linked_order_ids": ",".join([o.to_str() for o in self.linked_order_ids]) if self.linked_order_ids is not None else None,  # noqa
+            "parent_order_id": self.parent_order_id.to_str() if self.parent_order_id is not None else None,
             "tags": self.tags,
             "ts_last": self.ts_last,
             "ts_init": self.ts_init,
@@ -186,7 +188,7 @@ cdef class MarketOrder(Order):
     @staticmethod
     cdef MarketOrder create(OrderInitialized init):
         """
-        Return an order from the given initialized event.
+        Return a `market` order from the given initialized event.
 
         Parameters
         ----------
@@ -218,36 +220,8 @@ cdef class MarketOrder(Order):
             init_id=init.id,
             ts_init=init.ts_init,
             order_list_id=init.order_list_id,
+            contingency_type=init.contingency_type,
+            linked_order_ids=init.linked_order_ids,
             parent_order_id=init.parent_order_id,
-            child_order_ids=init.child_order_ids,
-            contingency=init.contingency,
-            contingency_ids=init.contingency_ids,
             tags=init.tags,
         )
-
-    cpdef str info(self):
-        """
-        Return a summary description of the order.
-
-        Returns
-        -------
-        str
-
-        """
-        return (
-            f"{OrderSideParser.to_str(self.side)} {self.quantity.to_str()} {self.instrument_id} "
-            f"{OrderTypeParser.to_str(self.type)} "
-            f"{TimeInForceParser.to_str(self.time_in_force)}"
-        )
-
-    cdef void _filled(self, OrderFilled fill) except *:
-        self.venue_order_id = fill.venue_order_id
-        self.position_id = fill.position_id
-        self.strategy_id = fill.strategy_id
-        self._execution_ids.append(fill.execution_id)
-        self.execution_id = fill.execution_id
-        filled_qty: Decimal = self.filled_qty.as_decimal() + fill.last_qty.as_decimal()
-        self.filled_qty = Quantity(filled_qty, fill.last_qty.precision)
-        self.leaves_qty = Quantity(self.quantity.as_decimal() - filled_qty, fill.last_qty.precision)
-        self.ts_last = fill.ts_event
-        self.avg_px = self._calculate_avg_px(fill.last_qty, fill.last_px)

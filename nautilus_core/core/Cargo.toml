@@ -1,0 +1,31 @@
+[package]
+name = "nautilus_core"
+version = "0.1.0"
+authors = ["Nautech Systems <info@nautechsystems.io>"]
+edition = "2021"
+
+[lib]
+name = "nautilus_core"
+crate-type = ["rlib", "cdylib", "staticlib"]
+
+[dependencies]
+chrono = "0.4.19"
+pyo3 = { version = "0.17.1" }
+uuid = { version = "1.1.2", features = ["v4"] }
+lazy_static = "1.4.0"
+
+[features]
+extension-module = ["pyo3/extension-module"]
+default = []
+
+[dev-dependencies]
+criterion = "0.3.5"
+iai = "0.1"
+rstest = "0.15.0"
+
+[build-dependencies]
+cbindgen = "0.24.3"
+
+[[bench]]
+name = "criterion_time_benchmark"
+harness = false

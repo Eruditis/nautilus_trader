@@ -26,7 +26,11 @@ from nautilus_trader.model.currencies import USD
 from nautilus_trader.model.currencies import USDT
 from nautilus_trader.model.enums import OptionKindParser
 from nautilus_trader.model.instruments.base import Instrument
-from nautilus_trader.model.instruments.crypto_perp import CryptoPerpetual
+from nautilus_trader.model.instruments.crypto_future import CryptoFuture
+from nautilus_trader.model.instruments.crypto_perpetual import CryptoPerpetual
+from nautilus_trader.model.instruments.equity import Equity
+from nautilus_trader.model.instruments.future import Future
+from nautilus_trader.model.instruments.option import Option
 from nautilus_trader.model.objects import Money
 from nautilus_trader.model.objects import Price
 from nautilus_trader.model.objects import Quantity
@@ -39,11 +43,12 @@ AUDUSD_SIM = TestInstrumentProvider.default_fx_ccy("AUD/USD")
 USDJPY_SIM = TestInstrumentProvider.default_fx_ccy("USD/JPY")
 XBTUSD_BITMEX = TestInstrumentProvider.xbtusd_bitmex()
 BTCUSDT_BINANCE = TestInstrumentProvider.btcusdt_binance()
+BTCUSDT_220325 = TestInstrumentProvider.btcusdt_future_binance()
 ETHUSD_BITMEX = TestInstrumentProvider.ethusd_bitmex()
 AAPL_EQUITY = TestInstrumentProvider.aapl_equity()
 ES_FUTURE = TestInstrumentProvider.es_future()
 AAPL_OPTION = TestInstrumentProvider.aapl_option()
-NFL_INSTRUMENT = TestInstrumentProvider.betting_instrument()
+NFL_INSTRUMENT = BetfairTestStubs.betting_instrument()
 
 
 class TestInstrument:
@@ -85,7 +90,7 @@ class TestInstrument:
         # Assert
         assert result == {
             "type": "Instrument",
-            "id": "BTC/USDT.BINANCE",
+            "id": "BTCUSDT.BINANCE",
             "native_symbol": "BTCUSDT",
             "asset_class": "CRYPTO",
             "asset_type": "SPOT",
@@ -116,7 +121,7 @@ class TestInstrument:
         # Arrange
         values = {
             "type": "Instrument",
-            "id": "BTC/USDT.BINANCE",
+            "id": "BTCUSDT.BINANCE",
             "native_symbol": "BTCUSDT",
             "asset_class": "CRYPTO",
             "asset_type": "SPOT",
@@ -149,7 +154,7 @@ class TestInstrument:
         # Assert
         assert result == BTCUSDT_BINANCE
 
-    def test_crypto_swap_instrument_to_dict(self):
+    def test_crypto_perpetual_instrument_to_dict(self):
         # Arrange, Act
         result = CryptoPerpetual.to_dict(XBTUSD_BITMEX)
 
@@ -180,6 +185,119 @@ class TestInstrument:
             "ts_event": 0,
             "ts_init": 0,
             "info": None,
+        }
+
+    def test_crypto_future_instrument_to_dict(self):
+        # Arrange, Act
+        result = CryptoFuture.to_dict(BTCUSDT_220325)
+
+        # Assert
+        assert CryptoFuture.from_dict(result) == BTCUSDT_220325
+        assert result == {
+            "type": "CryptoFuture",
+            "id": "BTCUSDT_220325.BINANCE",
+            "native_symbol": "BTCUSDT",
+            "underlying": "BTC",
+            "quote_currency": "USDT",
+            "settlement_currency": "USDT",
+            "expiry_date": "2022-03-25",
+            "price_precision": 2,
+            "price_increment": "0.01",
+            "size_precision": 6,
+            "size_increment": "0.000001",
+            "max_quantity": "9000.000000",
+            "min_quantity": "0.000001",
+            "max_notional": None,
+            "min_notional": "10.00000000 USDT",
+            "max_price": "1000000.00",
+            "min_price": "0.01",
+            "margin_init": "0",
+            "margin_maint": "0",
+            "maker_fee": "0.001",
+            "taker_fee": "0.001",
+            "ts_event": 0,
+            "ts_init": 0,
+            "info": None,
+        }
+
+    def test_equity_instrument_to_dict(self):
+        # Arrange, Act
+        result = Equity.to_dict(AAPL_EQUITY)
+
+        # Assert
+        assert Equity.from_dict(result) == AAPL_EQUITY
+        assert result == {
+            "type": "Equity",
+            "id": "AAPL.NASDAQ",
+            "native_symbol": "AAPL",
+            "currency": "USD",
+            "price_precision": 2,
+            "price_increment": "0.01",
+            "size_precision": 0,
+            "size_increment": "1",
+            "multiplier": "1",
+            "lot_size": "1",
+            "isin": "US0378331005",
+            "margin_init": "0",
+            "margin_maint": "0",
+            "maker_fee": "0",
+            "taker_fee": "0",
+            "ts_event": 0,
+            "ts_init": 0,
+        }
+
+    def test_future_instrument_to_dict(self):
+        # Arrange, Act
+        result = Future.to_dict(ES_FUTURE)
+
+        # Assert
+        assert Future.from_dict(result) == ES_FUTURE
+        assert result == {
+            "asset_class": "INDEX",
+            "currency": "USD",
+            "expiry_date": "2021-12-17",
+            "id": "ESZ21.CME",
+            "lot_size": "1",
+            "margin_init": "0",
+            "margin_maint": "0",
+            "multiplier": "1",
+            "native_symbol": "ESZ21",
+            "price_increment": "0.01",
+            "price_precision": 2,
+            "size_increment": "1",
+            "size_precision": 0,
+            "ts_event": 0,
+            "ts_init": 0,
+            "type": "Future",
+            "underlying": "ES",
+        }
+
+    def test_option_instrument_to_dict(self):
+        # Arrange, Act
+        result = Option.to_dict(AAPL_OPTION)
+
+        # Assert
+        assert Option.from_dict(result) == AAPL_OPTION
+        assert result == {
+            "asset_class": "EQUITY",
+            "currency": "USD",
+            "expiry_date": "2021-12-17",
+            "id": "AAPL211217C00150000.OPRA",
+            "kind": "CALL",
+            "lot_size": "1",
+            "margin_init": "0",
+            "margin_maint": "0",
+            "multiplier": "100",
+            "native_symbol": "AAPL211217C00150000",
+            "price_increment": "0.01",
+            "price_precision": 2,
+            "size_increment": "1",
+            "size_precision": 0,
+            "strike_price": "149.00",
+            "ts_event": 0,
+            "ts_init": 0,
+            "type": "Option",
+            "underlying": "AAPL",
         }
 
     @pytest.mark.parametrize(
@@ -302,7 +420,7 @@ class TestInstrument:
     @pytest.mark.skip("Not implemented")
     def test_next_ask_price(self, instrument, tick_scheme_name, value, n, expected):
         instrument.tick_scheme_name = tick_scheme_name
-        result = instrument.next_ask_price(value, n=n)
+        result = instrument.next_ask_price(value, num_ticks=n)
         expected = Price.from_str(expected)
         assert result == expected
 
@@ -316,7 +434,7 @@ class TestInstrument:
     @pytest.mark.skip("Not implemented")
     def test_next_bid_price(self, instrument, tick_scheme_name, value, n, expected):
         instrument.tick_scheme_name = tick_scheme_name
-        result = instrument.next_bid_price(value, n=n)
+        result = instrument.next_bid_price(value, num_ticks=n)
         expected = Price.from_str(expected)
         assert result == expected
 
@@ -332,7 +450,7 @@ class TestBettingInstrument:
     def test_notional_value(self):
         notional = self.instrument.notional_value(
             quantity=Quantity.from_int(100),
-            price=Price.from_str("0.5").as_decimal(),
+            price=Price.from_str("0.5"),
             inverse_as_quote=False,
         ).as_decimal()
         # We are long 100 at 0.5 probability, aka 2.0 in odds terms

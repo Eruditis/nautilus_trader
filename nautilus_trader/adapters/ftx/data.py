@@ -16,25 +16,26 @@
 import asyncio
 from typing import Any, Dict, List, Optional
 
-import orjson
+import msgspec
 import pandas as pd
 
-from nautilus_trader.adapters.ftx.common import FTX_VENUE
-from nautilus_trader.adapters.ftx.data_types import FTXTicker
+from nautilus_trader.adapters.ftx.core.constants import FTX_VENUE
+from nautilus_trader.adapters.ftx.core.types import FTXTicker
 from nautilus_trader.adapters.ftx.http.client import FTXHttpClient
 from nautilus_trader.adapters.ftx.http.error import FTXClientError
 from nautilus_trader.adapters.ftx.http.error import FTXError
-from nautilus_trader.adapters.ftx.parsing import parse_bars
-from nautilus_trader.adapters.ftx.parsing import parse_book_partial_ws
-from nautilus_trader.adapters.ftx.parsing import parse_book_update_ws
-from nautilus_trader.adapters.ftx.parsing import parse_market
-from nautilus_trader.adapters.ftx.parsing import parse_quote_tick_ws
-from nautilus_trader.adapters.ftx.parsing import parse_ticker_ws
-from nautilus_trader.adapters.ftx.parsing import parse_trade_ticks_ws
+from nautilus_trader.adapters.ftx.parsing.common import parse_instrument
+from nautilus_trader.adapters.ftx.parsing.http import parse_bars_http
+from nautilus_trader.adapters.ftx.parsing.websocket import parse_book_partial_ws
+from nautilus_trader.adapters.ftx.parsing.websocket import parse_book_update_ws
+from nautilus_trader.adapters.ftx.parsing.websocket import parse_quote_tick_ws
+from nautilus_trader.adapters.ftx.parsing.websocket import parse_ticker_ws
+from nautilus_trader.adapters.ftx.parsing.websocket import parse_trade_ticks_ws
 from nautilus_trader.adapters.ftx.providers import FTXInstrumentProvider
 from nautilus_trader.adapters.ftx.websocket.client import FTXWebSocketClient
 from nautilus_trader.cache.cache import Cache
 from nautilus_trader.common.clock import LiveClock
+from nautilus_trader.common.logging import LogColor
 from nautilus_trader.common.logging import Logger
 from nautilus_trader.core.datetime import secs_to_nanos
 from nautilus_trader.core.uuid import UUID4
@@ -78,6 +79,8 @@ class FTXDataClient(LiveMarketDataClient):
         The logger for the client.
     instrument_provider : FTXInstrumentProvider
         The instrument provider.
+    us : bool, default False
+        If the client is for FTX US.
     """
 
     def __init__(
@@ -89,10 +92,12 @@ class FTXDataClient(LiveMarketDataClient):
         clock: LiveClock,
         logger: Logger,
         instrument_provider: FTXInstrumentProvider,
+        us: bool = False,
     ):
         super().__init__(
             loop=loop,
             client_id=ClientId(FTX_VENUE.value),
+            venue=FTX_VENUE,
             instrument_provider=instrument_provider,
             msgbus=msgbus,
             cache=cache,
@@ -105,36 +110,35 @@ class FTXDataClient(LiveMarketDataClient):
             loop=loop,
             clock=clock,
             logger=logger,
-            handler=self._handle_ws_message,
+            msg_handler=self._handle_ws_message,
+            reconnect_handler=self._handle_ws_reconnect,
             key=client.api_key,
             secret=client.api_secret,
+            us=us,
         )
 
         # Hot caches
         self._instrument_ids: Dict[str, InstrumentId] = {}
 
-    def connect(self):
-        """
-        Connect the client to FTX.
-        """
+        if us:
+            self._log.info("Set FTX US.", LogColor.BLUE)
+
+    def connect(self) -> None:
         self._log.info("Connecting...")
         self._loop.create_task(self._connect())
 
-    def disconnect(self):
-        """
-        Disconnect the client from FTX.
-        """
+    def disconnect(self) -> None:
         self._log.info("Disconnecting...")
         self._loop.create_task(self._disconnect())
 
-    async def _connect(self):
+    async def _connect(self) -> None:
         # Connect HTTP client
         if not self._http_client.connected:
             await self._http_client.connect()
         try:
-            await self._instrument_provider.load_all_or_wait_async()
-        except FTXError as ex:
-            self._log.exception(ex)
+            await self._instrument_provider.initialize()
+        except FTXError as e:
+            self._log.exception("Error on connect", e)
             return
 
         self._send_all_instruments_to_data_engine()
@@ -146,7 +150,7 @@ class FTXDataClient(LiveMarketDataClient):
         self._set_connected(True)
         self._log.info("Connected.")
 
-    async def _disconnect(self):
+    async def _disconnect(self) -> None:
         # Disconnect WebSocket client
         if self._ws_client.is_connected:
             await self._ws_client.disconnect()
@@ -159,26 +163,13 @@ class FTXDataClient(LiveMarketDataClient):
         self._set_connected(False)
         self._log.info("Disconnected.")
 
-    # -- SUBSCRIPTIONS -----------------------------------------------------------------------------
+    # -- SUBSCRIPTIONS ----------------------------------------------------------------------------
 
-    def subscribe_instruments(self):
-        """
-        Subscribe to instrument data for the venue.
-
-        """
+    def subscribe_instruments(self) -> None:
         for instrument_id in list(self._instrument_provider.get_all().keys()):
             self._add_subscription_instrument(instrument_id)
 
-    def subscribe_instrument(self, instrument_id: InstrumentId):
-        """
-        Subscribe to instrument data for the given instrument ID.
-
-        Parameters
-        ----------
-        instrument_id : InstrumentId
-            The instrument ID to subscribe to.
-
-        """
+    def subscribe_instrument(self, instrument_id: InstrumentId) -> None:
         self._add_subscription_instrument(instrument_id)
 
     def subscribe_order_book_deltas(
@@ -187,7 +178,7 @@ class FTXDataClient(LiveMarketDataClient):
         book_type: BookType,
         depth: Optional[int] = None,
         kwargs: dict = None,
-    ):
+    ) -> None:
         if book_type == BookType.L3_MBO:
             self._log.error(
                 "Cannot subscribe to orderbook deltas: "
@@ -205,7 +196,7 @@ class FTXDataClient(LiveMarketDataClient):
         book_type: BookType,
         depth: Optional[int] = None,
         kwargs: dict = None,
-    ):
+    ) -> None:
         if book_type == BookType.L3_MBO:
             self._log.error(
                 "Cannot subscribe to orderbook snapshots: "
@@ -217,52 +208,53 @@ class FTXDataClient(LiveMarketDataClient):
         self._loop.create_task(self._ws_client.subscribe_orderbook(instrument_id.symbol.value))
         self._add_subscription_order_book_snapshots(instrument_id)
 
-    def subscribe_ticker(self, instrument_id: InstrumentId):
+    def subscribe_ticker(self, instrument_id: InstrumentId) -> None:
         self._loop.create_task(self._ws_client.subscribe_ticker(instrument_id.symbol.value))
         self._add_subscription_ticker(instrument_id)
 
-    def subscribe_quote_ticks(self, instrument_id: InstrumentId):
+    def subscribe_quote_ticks(self, instrument_id: InstrumentId) -> None:
         self._loop.create_task(self._ws_client.subscribe_ticker(instrument_id.symbol.value))
         self._add_subscription_quote_ticks(instrument_id)
 
-    def subscribe_trade_ticks(self, instrument_id: InstrumentId):
+    def subscribe_trade_ticks(self, instrument_id: InstrumentId) -> None:
         self._loop.create_task(self._ws_client.subscribe_trades(instrument_id.symbol.value))
         self._add_subscription_trade_ticks(instrument_id)
 
-    def subscribe_bars(self, bar_type: BarType):
+    def subscribe_bars(self, bar_type: BarType) -> None:
         self._log.error(
             f"Cannot subscribe to bars {bar_type} (not supported by the FTX exchange). "
             "Try and subscribe with `BarType` for INTERNAL aggregation source",
         )
 
-    def subscribe_instrument_status_updates(self, instrument_id: InstrumentId):
+    def subscribe_instrument_status_updates(self, instrument_id: InstrumentId) -> None:
         self._log.error(
             f"Cannot subscribe to instrument status updates for {instrument_id} "
             f"(not yet supported by NautilusTrader).",
         )
 
-    def subscribe_instrument_close_prices(self, instrument_id: InstrumentId):
+    def subscribe_instrument_close_prices(self, instrument_id: InstrumentId) -> None:
         self._log.error(
             f"Cannot subscribe to instrument close prices for {instrument_id} "
             f"(not supported by the FTX exchange).",
         )
 
-    def unsubscribe_instruments(self):
+    def unsubscribe_instruments(self) -> None:
         for instrument_id in list(self._instrument_provider.get_all().keys()):
             self._remove_subscription_instrument(instrument_id)
 
-    def unsubscribe_instrument(self, instrument_id: InstrumentId):
+    def unsubscribe_instrument(self, instrument_id: InstrumentId) -> None:
         self._remove_subscription_instrument(instrument_id)
 
-    def unsubscribe_order_book_deltas(self, instrument_id: InstrumentId):
+    def unsubscribe_order_book_deltas(self, instrument_id: InstrumentId) -> None:
         self._remove_subscription_order_book_deltas(instrument_id)
         if instrument_id not in self.subscribed_order_book_snapshots():
-            # Only unsubscribe if there are also no subscriptions for the markets order book snapshots
+            # Only unsubscribe if there are also no subscriptions for the
+            # markets order book snapshots.
             self._loop.create_task(
                 self._ws_client.unsubscribe_orderbook(instrument_id.symbol.value)
             )
 
-    def unsubscribe_order_book_snapshots(self, instrument_id: InstrumentId):
+    def unsubscribe_order_book_snapshots(self, instrument_id: InstrumentId) -> None:
         self._remove_subscription_order_book_snapshots(instrument_id)
         if instrument_id not in self.subscribed_order_book_deltas():
             # Only unsubscribe if there are also no subscriptions for the markets order book deltas
@@ -270,38 +262,55 @@ class FTXDataClient(LiveMarketDataClient):
                 self._ws_client.unsubscribe_orderbook(instrument_id.symbol.value)
             )
 
-    def unsubscribe_ticker(self, instrument_id: InstrumentId):
+    def unsubscribe_ticker(self, instrument_id: InstrumentId) -> None:
         self._remove_subscription_ticker(instrument_id)
         if instrument_id not in self.subscribed_quote_ticks():
             # Only unsubscribe if there are also no subscriptions for the markets quote ticks
             self._loop.create_task(self._ws_client.unsubscribe_ticker(instrument_id.symbol.value))
 
-    def unsubscribe_quote_ticks(self, instrument_id: InstrumentId):
+    def unsubscribe_quote_ticks(self, instrument_id: InstrumentId) -> None:
         self._remove_subscription_quote_ticks(instrument_id)
         if instrument_id not in self.subscribed_tickers():
             # Only unsubscribe if there are also no subscriptions for the markets ticker
             self._loop.create_task(self._ws_client.unsubscribe_ticker(instrument_id.symbol.value))
 
-    def unsubscribe_trade_ticks(self, instrument_id: InstrumentId):
+    def unsubscribe_trade_ticks(self, instrument_id: InstrumentId) -> None:
         self._remove_subscription_trade_ticks(instrument_id)
         self._loop.create_task(self._ws_client.unsubscribe_trades(instrument_id.symbol.value))
 
-    def unsubscribe_bars(self, bar_type: BarType):
+    def unsubscribe_bars(self, bar_type: BarType) -> None:
         self._log.error(
             f"Cannot unsubscribe from bars {bar_type} (not supported by the FTX exchange)."
         )
 
-    def unsubscribe_instrument_status_updates(self, instrument_id: InstrumentId):
+    def unsubscribe_instrument_status_updates(self, instrument_id: InstrumentId) -> None:
         self._log.error(
             "Cannot unsubscribe from instrument status updates (not supported by the FTX exchange).",
         )
 
-    def unsubscribe_instrument_close_prices(self, instrument_id: InstrumentId):
+    def unsubscribe_instrument_close_prices(self, instrument_id: InstrumentId) -> None:
         self._log.error(
             "Cannot unsubscribe from instrument close prices (not supported by the FTX exchange).",
         )
 
-    # -- REQUESTS ----------------------------------------------------------------------------------
+    # -- REQUESTS ---------------------------------------------------------------------------------
+
+    def request_instrument(self, instrument_id: InstrumentId, correlation_id: UUID4) -> None:
+        instrument: Optional[Instrument] = self._instrument_provider.find(instrument_id)
+        if instrument is None:
+            self._log.error(f"Cannot find instrument for {instrument_id}.")
+            return
+
+        data_type = DataType(
+            type=Instrument,
+            metadata={"instrument_id": instrument_id},
+        )
+
+        self._handle_data_response(
+            data_type=data_type,
+            data=[instrument],  # Data engine handles lists of instruments
+            correlation_id=correlation_id,
+        )
 
     def request_quote_ticks(
         self,
@@ -310,7 +319,7 @@ class FTXDataClient(LiveMarketDataClient):
         to_datetime: pd.Timestamp,
         limit: int,
         correlation_id: UUID4,
-    ):
+    ) -> None:
         self._log.error(
             "Cannot request historical quote ticks: not published by FTX.",
         )
@@ -322,7 +331,7 @@ class FTXDataClient(LiveMarketDataClient):
         to_datetime: pd.Timestamp,
         limit: int,
         correlation_id: UUID4,
-    ):
+    ) -> None:
         self._loop.create_task(
             self._request_trade_ticks(
                 instrument_id,
@@ -340,7 +349,7 @@ class FTXDataClient(LiveMarketDataClient):
         to_datetime: pd.Timestamp,
         limit: int,
         correlation_id: UUID4,
-    ):
+    ) -> None:
         instrument = self._instrument_provider.find(instrument_id)
         if instrument is None:
             self._log.error(
@@ -383,7 +392,7 @@ class FTXDataClient(LiveMarketDataClient):
         to_datetime: pd.Timestamp,
         limit: int,
         correlation_id: UUID4,
-    ):
+    ) -> None:
         if not bar_type.spec.is_time_aggregated():
             self._log.error(
                 f"Cannot request {bar_type}: only time bars are aggregated by FTX.",
@@ -421,7 +430,7 @@ class FTXDataClient(LiveMarketDataClient):
         to_datetime: pd.Timestamp,
         limit: int,
         correlation_id: UUID4,
-    ):
+    ) -> None:
         instrument = self._instrument_provider.find(bar_type.instrument_id)
         if instrument is None:
             self._log.error(
@@ -482,7 +491,7 @@ class FTXDataClient(LiveMarketDataClient):
             while len(data) > limit:
                 data.pop(0)  # Pop left
 
-        bars: List[Bar] = parse_bars(
+        bars: List[Bar] = parse_bars_http(
             instrument=instrument,
             bar_type=bar_type,
             data=data,
@@ -493,7 +502,7 @@ class FTXDataClient(LiveMarketDataClient):
 
         self._handle_bars(bar_type, bars, partial, correlation_id)
 
-    async def _subscribed_instruments_update(self, delay):
+    async def _subscribed_instruments_update(self, delay) -> None:
         await self._instrument_provider.load_all_async()
 
         self._send_all_instruments_to_data_engine()
@@ -501,40 +510,45 @@ class FTXDataClient(LiveMarketDataClient):
         update = self.run_after_delay(delay, self._subscribed_instruments_update(delay))
         self._update_instruments_task = self._loop.create_task(update)
 
-    def _send_all_instruments_to_data_engine(self):
+    def _send_all_instruments_to_data_engine(self) -> None:
         for instrument in self._instrument_provider.get_all().values():
             self._handle_data(instrument)
 
         for currency in self._instrument_provider.currencies().values():
             self._cache.add_currency(currency)
 
-    def _get_cached_instrument_id(self, msg: Dict[str, Any]) -> InstrumentId:
+    def _get_cached_instrument_id(self, symbol: str) -> InstrumentId:
         # Parse instrument ID
-        symbol: str = msg["market"]
         instrument_id: Optional[InstrumentId] = self._instrument_ids.get(symbol)
         if not instrument_id:
             instrument_id = InstrumentId(Symbol(symbol), FTX_VENUE)
             self._instrument_ids[symbol] = instrument_id
         return instrument_id
 
-    def _handle_ws_message(self, raw: bytes):
-        msg: Dict[str, Any] = orjson.loads(raw)
+    def _handle_ws_reconnect(self) -> None:
+        # TODO(cs): Request order book snapshot?
+        pass
+
+    def _handle_ws_message(self, raw: bytes) -> None:
+        msg: Dict[str, Any] = msgspec.json.decode(raw)
         channel: str = msg.get("channel")
         if channel is None:
             self._log.error(str(msg))
             return
 
-        if channel == "markets":
-            self._loop.create_task(self._handle_markets(msg))
-        elif channel == "orderbook":
-            self._handle_orderbook(msg)
-        elif channel == "ticker":
-            self._handle_ticker(msg)
-        elif channel == "trades":
-            self._handle_trades(msg)
-        else:
-            self._log.error(f"Unrecognized websocket message type, was {channel}")
-            return
+        try:
+            if channel == "markets":
+                self._loop.create_task(self._handle_markets(msg))
+            elif channel == "orderbook":
+                self._handle_orderbook(msg)
+            elif channel == "ticker":
+                self._handle_ticker(msg)
+            elif channel == "trades":
+                self._handle_trades(msg)
+            else:
+                self._log.error(f"Unrecognized websocket message type, was {channel}")
+        except Exception as e:
+            self._log.error(f"Error handling websocket message, {e}")
 
     async def _handle_markets(self, msg: Dict[str, Any]) -> None:
         data: Optional[Dict[str, Any]] = msg.get("data")
@@ -545,20 +559,27 @@ class FTXDataClient(LiveMarketDataClient):
         try:
             # Get current commission rates
             account_info: Dict[str, Any] = await self._http_client.get_account_info()
-        except FTXClientError:
+        except FTXClientError as e:
             self._log.error(
                 "Cannot load instruments: API key authentication failed "
-                "(this is needed to fetch the applicable account fee tier).",
+                f"(this is needed to fetch the applicable account fee tier). {e}",
             )
             return
 
-        for _, data in data["data"].items():
-            instrument: Instrument = parse_market(
-                account_info=account_info,
-                data=data,
-                ts_init=self._clock.timestamp_ns(),
-            )
-            self._handle_data(instrument)
+        data_values = data["data"].values()
+        for data in data_values:
+            try:
+                instrument: Instrument = parse_instrument(
+                    account_info=account_info,
+                    data=data,
+                    ts_init=self._clock.timestamp_ns(),
+                )
+                self._handle_data(instrument)
+            except ValueError as e:
+                self._log.warning(
+                    f"Unable to parse instrument {data['name']}, {e}.",
+                )
+                continue
 
     def _handle_orderbook(self, msg: Dict[str, Any]) -> None:
         data: Optional[Dict[str, Any]] = msg.get("data")
@@ -567,7 +588,7 @@ class FTXDataClient(LiveMarketDataClient):
             return
 
         # Get instrument ID
-        instrument_id: InstrumentId = self._get_cached_instrument_id(msg)
+        instrument_id: InstrumentId = self._get_cached_instrument_id(msg["market"])
 
         msg_type = msg["type"]
         if msg_type == "partial":
@@ -592,7 +613,7 @@ class FTXDataClient(LiveMarketDataClient):
             return
 
         # Get instrument
-        instrument_id: InstrumentId = self._get_cached_instrument_id(msg)
+        instrument_id: InstrumentId = self._get_cached_instrument_id(msg["market"])
         instrument: Instrument = self._instrument_provider.find(instrument_id)
         if instrument is None:
             self._log.error(
@@ -622,7 +643,7 @@ class FTXDataClient(LiveMarketDataClient):
             return
 
         # Get instrument
-        instrument_id: InstrumentId = self._get_cached_instrument_id(msg)
+        instrument_id: InstrumentId = self._get_cached_instrument_id(msg["market"])
         instrument: Instrument = self._instrument_provider.find(instrument_id)
         if instrument is None:
             self._log.error(

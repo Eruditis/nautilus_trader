@@ -13,7 +13,7 @@
 #  limitations under the License.
 # -------------------------------------------------------------------------------------------------
 
-from decimal import Decimal
+from typing import Optional
 
 from nautilus_trader.core.correctness cimport Condition
 from nautilus_trader.model.c_enums.account_type cimport AccountType
@@ -34,6 +34,8 @@ cdef class Account:
         self.id = event.account_id
         self.type = event.account_type
         self.base_currency = event.base_currency
+        self.is_cash_account = self.type == AccountType.CASH or self.type == AccountType.BETTING
+        self.is_margin_account = self.type == AccountType.MARGIN
         self.calculate_account_state = calculate_account_state
 
         self._events = [event]      # type: list[AccountState]  # `last_event_c()` guaranteed
@@ -44,27 +46,21 @@ cdef class Account:
         self.update_balances(event.balances)
 
     def __eq__(self, Account other) -> bool:
-        return self.id.value == other.id.value
+        return self.id == other.id
 
     def __hash__(self) -> int:
-        return hash(self.id.value)
+        return hash(self.id)
 
     def __repr__(self) -> str:
         cdef str base_str = self.base_currency.code if self.base_currency is not None else None
         return (
             f"{type(self).__name__}("
-            f"id={self.id.value}, "
+            f"id={self.id.to_str()}, "
             f"type={AccountTypeParser.to_str(self.type)}, "
             f"base={base_str})"
         )
 
-# -- QUERIES ---------------------------------------------------------------------------------------
-
-    cdef bint is_cash_account(self) except *:
-        return self.type == AccountType.CASH
-
-    cdef bint is_margin_account(self) except *:
-        return self.type == AccountType.MARGIN
+# -- QUERIES --------------------------------------------------------------------------------------
 
     cdef AccountState last_event_c(self):
         return self._events[-1]  # Guaranteed at least one event from initialization
@@ -78,7 +74,7 @@ cdef class Account:
     @property
     def last_event(self):
         """
-        The accounts last state event.
+        Return the accounts last state event.
 
         Returns
         -------
@@ -90,7 +86,7 @@ cdef class Account:
     @property
     def events(self):
         """
-        All events received by the account.
+        Return all events received by the account.
 
         Returns
         -------
@@ -102,7 +98,7 @@ cdef class Account:
     @property
     def event_count(self):
         """
-        The count of events.
+        Return the count of events.
 
         Returns
         -------
@@ -345,7 +341,7 @@ cdef class Account:
 
         return self._commissions.get(currency)
 
-# -- COMMANDS --------------------------------------------------------------------------------------
+# -- COMMANDS -------------------------------------------------------------------------------------
 
     cpdef void apply(self, AccountState event) except *:
         """
@@ -407,13 +403,12 @@ cdef class Account:
 
         cdef AccountBalance balance
         for balance in balances:
-            total: Decimal = balance.total.as_decimal()
-            if total <= 0:
-                if total < 0:
+            if not balance.total._mem.raw > 0:
+                if balance.total._mem.raw < 0:
                     raise RuntimeError(
                         f"account blow up (balance was {balance.total}).",
                     )
-                if total == 0 and not allow_zero:
+                if balance.total.is_zero() and not allow_zero:
                     raise RuntimeError(
                         f"account blow up (balance was {balance.total}).",
                     )
@@ -441,14 +436,14 @@ cdef class Account:
         Condition.not_none(commission, "commission")
 
         # Increment total commissions
-        if commission.as_decimal() == 0:
+        if commission._mem.raw == 0:
             return  # Nothing to update
 
         cdef Currency currency = commission.currency
-        total_commissions: Decimal = self._commissions.get(currency, Decimal(0))
-        self._commissions[currency] = Money(total_commissions + commission, currency)
+        cdef double total_commissions = self._commissions.get(currency, 0.0)
+        self._commissions[currency] = Money(total_commissions + commission.as_f64_c(), currency)
 
-# -- CALCULATIONS ----------------------------------------------------------------------------------
+# -- CALCULATIONS ---------------------------------------------------------------------------------
 
     cdef void _recalculate_balance(self, Currency currency) except *:
         raise NotImplementedError("method must be implemented in the subclass")  # pragma: no cover
@@ -457,7 +452,7 @@ cdef class Account:
         self,
         Instrument instrument,
         Quantity last_qty,
-        last_px: Decimal,
+        Price last_px,
         LiquiditySide liquidity_side,
         bint inverse_as_quote=False,
     ):
@@ -467,7 +462,7 @@ cdef class Account:
     cpdef list calculate_pnls(
         self,
         Instrument instrument,
-        Position position,  # Can be None
+        Position position: Optional[Position],
         OrderFilled fill,
     ):
         """Abstract method (implement in subclass)."""

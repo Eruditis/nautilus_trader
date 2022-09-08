@@ -13,11 +13,12 @@
 #  limitations under the License.
 # -------------------------------------------------------------------------------------------------
 
-import orjson
-
-from libc.stdint cimport int64_t
-
 from decimal import Decimal
+from typing import Optional
+
+import msgspec
+
+from libc.stdint cimport uint64_t
 
 from nautilus_trader.core.correctness cimport Condition
 from nautilus_trader.model.c_enums.asset_class cimport AssetClass
@@ -35,14 +36,15 @@ cdef class Instrument(Data):
     """
     The base class for all instruments.
 
-    Represents a tradeable financial market instrument or trading pair.
+    Represents a tradable financial market instrument. This class can be used to
+    define an instrument, or act as a parent class for more specific instruments.
 
     Parameters
     ----------
     instrument_id : InstrumentId
         The instrument ID for the instrument.
     native_symbol : Symbol
-        The local/native symbol on the exchange for the instrument.
+        The native/local symbol on the exchange for the instrument.
     asset_class : AssetClass
         The instrument asset class.
     asset_type : AssetType
@@ -55,7 +57,7 @@ cdef class Instrument(Data):
         The price decimal precision.
     size_precision : int
         The trading size decimal precision.
-    price_increment : Price
+    price_increment : Price, optional
         The minimum price increment (tick size).
     size_increment : Price
         The minimum size increment.
@@ -72,9 +74,9 @@ cdef class Instrument(Data):
     min_notional : Money, optional
         The minimum allowable order notional value.
     max_price : Price, optional
-        The maximum allowable printed price.
+        The maximum allowable quoted price.
     min_price : Price, optional
-        The minimum allowable printed price.
+        The minimum allowable quoted price.
     margin_init : Decimal
         The initial (order) margin requirement in percentage of order value.
     margin_maint : Decimal
@@ -83,9 +85,9 @@ cdef class Instrument(Data):
         The fee rate for liquidity makers as a percentage of order value.
     taker_fee : Decimal
         The fee rate for liquidity takers as a percentage of order value.
-    ts_event: int64
+    ts_event : uint64_t
         The UNIX timestamp (nanoseconds) when the data event occurred.
-    ts_init: int64
+    ts_init : uint64_t
         The UNIX timestamp (nanoseconds) when the data object was initialized.
     tick_scheme_name : str, optional
         The name of the tick scheme.
@@ -136,22 +138,22 @@ cdef class Instrument(Data):
         bint is_inverse,
         int price_precision,
         int size_precision,
-        Price price_increment,  # Can be None  # TODO(cs): review this
+        Price price_increment: Optional[Price],
         Quantity size_increment not None,
         Quantity multiplier not None,
-        Quantity lot_size,      # Can be None
-        Quantity max_quantity,  # Can be None
-        Quantity min_quantity,  # Can be None
-        Money max_notional,     # Can be None
-        Money min_notional,     # Can be None
-        Price max_price,        # Can be None
-        Price min_price,        # Can be None
+        Quantity lot_size: Optional[Quantity],
+        Quantity max_quantity: Optional[Quantity],
+        Quantity min_quantity: Optional[Quantity],
+        Money max_notional: Optional[Money],
+        Money min_notional: Optional[Money],
+        Price max_price: Optional[Price],
+        Price min_price: Optional[Price],
         margin_init not None: Decimal,
         margin_maint not None: Decimal,
         maker_fee not None: Decimal,
         taker_fee not None: Decimal,
-        int64_t ts_event,
-        int64_t ts_init,
+        uint64_t ts_event,
+        uint64_t ts_init,
         str tick_scheme_name=None,
         dict info=None,
     ):
@@ -221,15 +223,15 @@ cdef class Instrument(Data):
             self._tick_scheme = get_tick_scheme(self.tick_scheme_name)
 
     def __eq__(self, Instrument other) -> bool:
-        return self.id.value == other.id.value
+        return self.id == other.id
 
     def __hash__(self) -> int:
-        return hash(self.id.value)
+        return hash(self.id)
 
     def __repr__(self) -> str:  # TODO(cs): tick_scheme_name pending
         return (
             f"{type(self).__name__}"
-            f"(id={self.id.value}, "
+            f"(id={self.id.to_str()}, "
             f"native_symbol={self.native_symbol}, "
             f"asset_class={AssetClassParser.to_str(self.asset_class)}, "
             f"asset_type={AssetTypeParser.to_str(self.asset_type)}, "
@@ -283,15 +285,15 @@ cdef class Instrument(Data):
             taker_fee=Decimal(values["taker_fee"]),
             ts_event=values["ts_event"],
             ts_init=values["ts_init"],
-            info=orjson.loads(info) if info is not None else None,
+            info=msgspec.json.decode(info) if info is not None else None,
         )
 
     @staticmethod
     cdef dict base_to_dict_c(Instrument obj):
         return {
             "type": "Instrument",
-            "id": obj.id.value,
-            "native_symbol": obj.native_symbol.value,
+            "id": obj.id.to_str(),
+            "native_symbol": obj.native_symbol.to_str(),
             "asset_class": AssetClassParser.to_str(obj.asset_class),
             "asset_type": AssetTypeParser.to_str(obj.asset_type),
             "quote_currency": obj.quote_currency.code,
@@ -314,7 +316,7 @@ cdef class Instrument(Data):
             "taker_fee": str(obj.taker_fee),
             "ts_event": obj.ts_event,
             "ts_init": obj.ts_init,
-            "info": orjson.dumps(obj.info) if obj.info is not None else None,
+            "info": msgspec.json.encode(obj.info) if obj.info is not None else None,
         }
 
     @staticmethod
@@ -349,7 +351,7 @@ cdef class Instrument(Data):
     @property
     def symbol(self):
         """
-        The instruments ticker symbol.
+        Return the instruments ticker symbol.
 
         Returns
         -------
@@ -361,7 +363,7 @@ cdef class Instrument(Data):
     @property
     def venue(self):
         """
-        The instruments trading venue.
+        Return the instruments trading venue.
 
         Returns
         -------
@@ -490,11 +492,11 @@ cdef class Instrument(Data):
     cpdef Money notional_value(
         self,
         Quantity quantity,
-        price: Decimal,
+        Price price,
         bint inverse_as_quote=False,
     ):
         """
-        Calculate the notional value from the given parameters.
+        Calculate the notional value.
 
         Result will be in quote currency for standard instruments, or base
         currency for inverse instruments.
@@ -503,7 +505,7 @@ cdef class Instrument(Data):
         ----------
         quantity : Quantity
             The total quantity.
-        price : Decimal or Price
+        price : Price
             The price for the calculation.
         inverse_as_quote : bool
             If inverse instrument calculations use quote currency (instead of base).
@@ -514,14 +516,11 @@ cdef class Instrument(Data):
 
         """
         Condition.not_none(quantity, "quantity")
-        Condition.type(price, (Decimal, Price), "price")
 
         if self.is_inverse:
             if inverse_as_quote:
                 # Quantity is notional
                 return Money(quantity, self.quote_currency)
-            notional_value: Decimal = quantity * self.multiplier * (1 / price)
-            return Money(notional_value, self.base_currency)
+            return Money(quantity.as_f64_c() * float(self.multiplier) * (1 / price.as_f64_c()), self.base_currency)
         else:
-            notional_value: Decimal = quantity * self.multiplier * price
-            return Money(notional_value, self.quote_currency)
+            return Money(quantity.as_f64_c() * float(self.multiplier) * price.as_f64_c(), self.quote_currency)

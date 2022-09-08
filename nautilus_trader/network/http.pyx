@@ -17,7 +17,7 @@ import asyncio
 import socket
 import urllib.parse
 from ssl import SSLContext
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import aiohttp
 import cython
@@ -30,6 +30,7 @@ from nautilus_trader.common.logging cimport LoggerAdapter
 from nautilus_trader.core.correctness cimport Condition
 
 
+# Seconds in one day
 cdef int ONE_DAY = 86_400
 
 
@@ -45,7 +46,7 @@ cdef class HttpClient:
         The logger for the client.
     ttl_dns_cache : int
         The time to live for the DNS cache.
-    ssl: Union[None, bool, Fingerprint, SSLContext], default=False
+    ssl: Union[None, bool, Fingerprint, SSLContext], default False
         The ssl context to use for HTTPS.
     connector_kwargs : dict, optional
         The connector key word arguments.
@@ -62,7 +63,7 @@ cdef class HttpClient:
         Logger logger not None,
         list addresses=None,
         list nameservers=None,
-        int ttl_dns_cache=ONE_DAY,
+        int ttl_dns_cache=86_400,
         ssl: Union[None, bool, Fingerprint, SSLContext]=False,
         dict connector_kwargs=None,
     ):
@@ -84,17 +85,33 @@ cdef class HttpClient:
 
     @property
     def connected(self) -> bool:
+        """
+        Return whether the HTTP client is connected.
+
+        Returns
+        -------
+        bool
+
+        """
         return len(self._sessions) > 0
 
     @property
     def session(self) -> ClientSession:
+        """
+        Return the current HTTP client session.
+
+        Returns
+        -------
+        aiohttp.ClientSession
+
+        """
         return self._get_session()
 
     @cython.boundscheck(False)
     @cython.wraparound(False)
     cdef object _get_session(self):
         if not self._sessions:
-            raise RuntimeError("No sessions, need to connect?")
+            raise RuntimeError("no sessions, need to connect?")
         # Circular buffer
         if self._sessions_idx >= self._sessions_len:
             self._sessions_idx = 0
@@ -107,6 +124,10 @@ cdef class HttpClient:
         return urllib.parse.urlencode(params)
 
     async def connect(self) -> None:
+        """
+        Connect the HTTP client session.
+
+        """
         self._log.debug("Connecting sessions...")
         self._sessions = [aiohttp.ClientSession(
             connector=aiohttp.TCPConnector(
@@ -128,6 +149,10 @@ cdef class HttpClient:
         self._log.debug(f"Connected sessions: {self._sessions}.")
 
     async def disconnect(self) -> None:
+        """
+        Disconnect the HTTP client session.
+
+        """
         for session in self._sessions:
             self._log.debug(f"Closing session: {session}...")
             await session.close()
@@ -138,7 +163,7 @@ cdef class HttpClient:
         method: str,
         url: str,
         headers: Optional[Dict[str, str]]=None,
-        json: Optional[Dict[str, str]]=None,
+        json: Optional[Dict[str, Any]]=None,
         **kwargs,
     ) -> ClientResponse:
         session: ClientSession = self._get_session()

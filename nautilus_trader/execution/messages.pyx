@@ -13,289 +13,866 @@
 #  limitations under the License.
 # -------------------------------------------------------------------------------------------------
 
-from libc.stdint cimport int64_t
+from typing import Optional
+
+import msgspec
+
+from libc.stdint cimport uint64_t
 
 from nautilus_trader.core.correctness cimport Condition
-from nautilus_trader.model.c_enums.liquidity_side cimport LiquiditySide
-from nautilus_trader.model.c_enums.liquidity_side cimport LiquiditySideParser
-from nautilus_trader.model.c_enums.order_status cimport OrderStatus
-from nautilus_trader.model.c_enums.order_status cimport OrderStatusParser
-from nautilus_trader.model.c_enums.position_side cimport PositionSide
-from nautilus_trader.model.c_enums.position_side cimport PositionSideParser
-from nautilus_trader.model.identifiers cimport AccountId
-from nautilus_trader.model.identifiers cimport ClientOrderId
-from nautilus_trader.model.identifiers cimport ExecutionId
+from nautilus_trader.core.uuid cimport UUID4
+from nautilus_trader.model.events.order cimport OrderInitialized
 from nautilus_trader.model.identifiers cimport InstrumentId
-from nautilus_trader.model.identifiers cimport VenueOrderId
-from nautilus_trader.model.objects cimport Quantity
+from nautilus_trader.model.identifiers cimport OrderListId
+from nautilus_trader.model.identifiers cimport PositionId
+from nautilus_trader.model.identifiers cimport StrategyId
+from nautilus_trader.model.identifiers cimport TraderId
+from nautilus_trader.model.objects cimport Price
+from nautilus_trader.model.orders.base cimport Order
+from nautilus_trader.model.orders.unpacker cimport OrderUnpacker
 
 
-cdef class OrderStatusReport:
+cdef class TradingCommand(Command):
     """
-    Represents an orders state at a point in time.
+    The abstract base class for all trading related commands.
 
     Parameters
     ----------
-    client_order_id : ClientOrderId
-        The reported client order ID.
-    venue_order_id : VenueOrderId
-        The reported order ID.
-    order_status : OrderStatus
-        The reported order status at the exchange.
-    filled_qty : Quantity
-        The reported filled quantity at the exchange.
-    ts_init : int64
-        The UNIX timestamp (nanoseconds) when the object was initialized.
-    """
-    def __init__(
-        self,
-        ClientOrderId client_order_id not None,
-        VenueOrderId venue_order_id not None,
-        OrderStatus order_status,
-        Quantity filled_qty not None,
-        int64_t ts_init,
-    ):
-        self.client_order_id = client_order_id
-        self.venue_order_id = venue_order_id
-        self.order_status = order_status
-        self.filled_qty = filled_qty
-        self.ts_init = ts_init
-
-    def __repr__(self) -> str:
-        return (
-            f"{type(self).__name__}("
-            f"client_order_id={self.client_order_id.value}, "
-            f"venue_order_id={self.venue_order_id}, "
-            f"order_status={OrderStatusParser.to_str(self.order_status)}, "
-            f"filled_qty={self.filled_qty}, "
-            f"ts_init={self.ts_init})"
-        )
-
-
-cdef class PositionStatusReport:
-    """
-    Represents a positions state at a point in time.
-
-    Parameters
-    ----------
+    client_id : ClientId, optional
+        The execution client ID for the command.
+    trader_id : TraderId
+        The trader ID for the command.
+    strategy_id : StrategyId
+        The strategy ID for the command.
     instrument_id : InstrumentId
-        The reported instrument ID.
-    position_side : PositionSide
-        The reported position side at the exchange.
-    qty : Quantity
-        The reported position quantity at the exchange.
-    ts_init : int64
+        The instrument ID for the command.
+    command_id : UUID4
+        The commands ID.
+    ts_init : uint64_t
         The UNIX timestamp (nanoseconds) when the object was initialized.
+
+    Warnings
+    --------
+    This class should not be used directly, but through a concrete subclass.
     """
+
     def __init__(
         self,
+        ClientId client_id: Optional[ClientId],
+        TraderId trader_id not None,
+        StrategyId strategy_id not None,
         InstrumentId instrument_id not None,
-        PositionSide position_side,
-        Quantity qty not None,
-        int64_t ts_init,
+        UUID4 command_id not None,
+        uint64_t ts_init,
     ):
+        super().__init__(command_id, ts_init)
+
+        self.client_id = client_id
+        self.trader_id = trader_id
+        self.strategy_id = strategy_id
         self.instrument_id = instrument_id
-        self.side = position_side
-        self.qty = qty
-        self.ts_init = ts_init
+
+
+cdef class SubmitOrder(TradingCommand):
+    """
+    Represents a command to submit the given order.
+
+    Parameters
+    ----------
+    trader_id : TraderId
+        The trader ID for the command.
+    strategy_id : StrategyId
+        The strategy ID for the command.
+    position_id : PositionId, optional
+        The position ID for the command.
+    check_position_exists : bool, default True
+        If a position is checked to exist for any given position ID.
+    order : Order
+        The order to submit.
+    command_id : UUID4
+        The commands ID.
+    ts_init : uint64_t
+        The UNIX timestamp (nanoseconds) when the object was initialized.
+    client_id : ClientId, optional
+        The execution client ID for the command.
+
+    References
+    ----------
+    https://www.onixs.biz/fix-dictionary/5.0.SP2/msgType_D_68.html
+    """
+
+    def __init__(
+        self,
+        TraderId trader_id not None,
+        StrategyId strategy_id not None,
+        PositionId position_id: Optional[PositionId],
+        bint check_position_exists,
+        Order order not None,
+        UUID4 command_id not None,
+        uint64_t ts_init,
+        ClientId client_id=None,
+    ):
+        super().__init__(
+            client_id=client_id,
+            trader_id=trader_id,
+            strategy_id=strategy_id,
+            instrument_id=order.instrument_id,
+            command_id=command_id,
+            ts_init=ts_init,
+        )
+
+        self.position_id = position_id
+        self.check_position_exists = check_position_exists
+        self.order = order
+
+    def __str__(self) -> str:
+        return (
+            f"{type(self).__name__}("
+            f"instrument_id={self.instrument_id.to_str()}, "
+            f"client_order_id={self.order.client_order_id.to_str()}, "
+            f"position_id={self.position_id}, "
+            f"check_position_exists={self.check_position_exists}, "
+            f"order={self.order.info()})"
+        )
 
     def __repr__(self) -> str:
         return (
             f"{type(self).__name__}("
-            f"instrument_id={self.instrument_id}, "
-            f"side={PositionSideParser.to_str(self.side)}, "
-            f"qty={self.qty}, "
+            f"client_id={self.client_id}, "  # Can be None
+            f"trader_id={self.trader_id.to_str()}, "
+            f"strategy_id={self.strategy_id.to_str()}, "
+            f"instrument_id={self.instrument_id.to_str()}, "
+            f"client_order_id={self.order.client_order_id.to_str()}, "
+            f"position_id={self.position_id}, "
+            f"check_position_exists={self.check_position_exists}, "
+            f"order={self.order.info()}, "
+            f"command_id={self.id.to_str()}, "
             f"ts_init={self.ts_init})"
         )
 
+    @staticmethod
+    cdef SubmitOrder from_dict_c(dict values):
+        Condition.not_none(values, "values")
+        cdef str c = values["client_id"]
+        cdef str p = values["position_id"]
+        return SubmitOrder(
+            client_id=ClientId(c) if c is not None else None,
+            trader_id=TraderId(values["trader_id"]),
+            strategy_id=StrategyId(values["strategy_id"]),
+            position_id=PositionId(p) if p is not None else None,
+            check_position_exists=values["check_position_exists"],
+            order=OrderUnpacker.unpack_c(msgspec.json.decode(values["order"])),
+            command_id=UUID4(values["command_id"]),
+            ts_init=values["ts_init"],
+        )
 
-cdef class ExecutionReport:
+    @staticmethod
+    cdef dict to_dict_c(SubmitOrder obj):
+        Condition.not_none(obj, "obj")
+        return {
+            "type": "SubmitOrder",
+            "client_id": obj.client_id.to_str() if obj.client_id is not None else None,
+            "trader_id": obj.trader_id.to_str(),
+            "strategy_id": obj.strategy_id.to_str(),
+            "position_id": obj.position_id.to_str() if obj.position_id is not None else None,
+            "check_position_exists": obj.check_position_exists,
+            "order": msgspec.json.encode(OrderInitialized.to_dict_c(obj.order.init_event_c())),
+            "command_id": obj.id.to_str(),
+            "ts_init": obj.ts_init,
+        }
+
+    @staticmethod
+    def from_dict(dict values) -> SubmitOrder:
+        """
+        Return a submit order command from the given dict values.
+
+        Parameters
+        ----------
+        values : dict[str, object]
+            The values for initialization.
+
+        Returns
+        -------
+        SubmitOrder
+
+        """
+        return SubmitOrder.from_dict_c(values)
+
+    @staticmethod
+    def to_dict(SubmitOrder obj):
+        """
+        Return a dictionary representation of this object.
+
+        Returns
+        -------
+        dict[str, object]
+
+        """
+        return SubmitOrder.to_dict_c(obj)
+
+
+cdef class SubmitOrderList(TradingCommand):
     """
-    Represents a report of execution state by order ID.
+    Represents a command to submit an order list consisting of bulk or related
+    parent-child contingent orders.
+
+    This command can correspond to a `NewOrderList <E> message` for the FIX
+    protocol.
 
     Parameters
     ----------
-    client_order_id : ClientOrderId
-        The client order ID.
-    venue_order_id : VenueOrderId
-        The venue order ID.
-    venue_position_id : PositionId, optional
-        The venue position ID associated with the order. If the trading
-        venue has assigned a position ID / ticket then pass that here,
-        otherwise pass ``None`` and the execution engine OMS will handle
-        position ID resolution.
-    execution_id : ExecutionId
-        The execution ID for the trade.
-    last_qty : Quantity
-        The quantity of the last fill.
-    last_px : Price
-        The price of the last fill.
-    commission : Money, optional
-        The commission for the transaction (can be None).
-    liquidity_side : LiquiditySide
-        The liquidity side for the fill.
-    ts_event : int64
-        The UNIX timestamp (nanoseconds) when the execution event occurred.
+    trader_id : TraderId
+        The trader ID for the command.
+    strategy_id : StrategyId
+        The strategy ID for the command.
+    order_list : OrderList
+        The order list to submit.
+    command_id : UUID4
+        The command ID.
+    ts_init : uint64_t
+        The UNIX timestamp (nanoseconds) when the object was initialized.
+    client_id : ClientId, optional
+        The execution client ID for the command.
+
+    References
+    ----------
+    https://www.onixs.biz/fix-dictionary/5.0.SP2/msgType_E_69.html
     """
 
     def __init__(
         self,
-        ClientOrderId client_order_id not None,
-        VenueOrderId venue_order_id not None,
-        PositionId venue_position_id,  # Can be None
-        ExecutionId execution_id not None,
-        Quantity last_qty not None,
-        Price last_px not None,
-        Money commission,  # Can be None
-        LiquiditySide liquidity_side,
-        int64_t ts_event,
-        int64_t ts_init,
+        TraderId trader_id not None,
+        StrategyId strategy_id not None,
+        OrderList order_list not None,
+        UUID4 command_id not None,
+        uint64_t ts_init,
+        ClientId client_id=None,
     ):
+        super().__init__(
+            client_id=client_id,
+            trader_id=trader_id,
+            strategy_id=strategy_id,
+            instrument_id=order_list.instrument_id,
+            command_id=command_id,
+            ts_init=ts_init,
+        )
+
+        self.list = order_list
+
+    def __str__(self) -> str:
+        return (
+            f"{type(self).__name__}("
+            f"instrument_id={self.instrument_id.to_str()}, "
+            f"order_list={self.list})"
+        )
+
+    def __repr__(self) -> str:
+        return (
+            f"{type(self).__name__}("
+            f"client_id={self.client_id}, "  # Can be None
+            f"trader_id={self.trader_id.to_str()}, "
+            f"strategy_id={self.strategy_id.to_str()}, "
+            f"instrument_id={self.instrument_id.to_str()}, "
+            f"order_list={self.list}, "
+            f"command_id={self.id.to_str()}, "
+            f"ts_init={self.ts_init})"
+        )
+
+    @staticmethod
+    cdef SubmitOrderList from_dict_c(dict values):
+        Condition.not_none(values, "values")
+        cdef str c = values["client_id"]
+        cdef dict o_dict
+        cdef OrderList order_list = OrderList(
+            list_id=OrderListId(values["order_list_id"]),
+            orders=[OrderUnpacker.unpack_c(o_dict) for o_dict in msgspec.json.decode(values["orders"])],
+        )
+        return SubmitOrderList(
+            client_id=ClientId(c) if c is not None else None,
+            trader_id=TraderId(values["trader_id"]),
+            strategy_id=StrategyId(values["strategy_id"]),
+            order_list=order_list,
+            command_id=UUID4(values["command_id"]),
+            ts_init=values["ts_init"],
+        )
+
+    @staticmethod
+    cdef dict to_dict_c(SubmitOrderList obj):
+        Condition.not_none(obj, "obj")
+        cdef Order o
+        return {
+            "type": "SubmitOrderList",
+            "client_id": obj.client_id.to_str() if obj.client_id is not None else None,
+            "trader_id": obj.trader_id.to_str(),
+            "strategy_id": obj.strategy_id.to_str(),
+            "order_list_id": str(obj.list.id),
+            "orders": msgspec.json.encode([OrderInitialized.to_dict_c(o.init_event_c()) for o in obj.list.orders]),
+            "command_id": obj.id.to_str(),
+            "ts_init": obj.ts_init,
+        }
+
+    @staticmethod
+    def from_dict(dict values) -> SubmitOrderList:
+        """
+        Return a submit order list command from the given dict values.
+
+        Parameters
+        ----------
+        values : dict[str, object]
+            The values for initialization.
+
+        Returns
+        -------
+        SubmitOrderList
+
+        """
+        return SubmitOrderList.from_dict_c(values)
+
+    @staticmethod
+    def to_dict(SubmitOrderList obj):
+        """
+        Return a dictionary representation of this object.
+
+        Returns
+        -------
+        dict[str, object]
+
+        """
+        return SubmitOrderList.to_dict_c(obj)
+
+
+cdef class ModifyOrder(TradingCommand):
+    """
+    Represents a command to modify the properties of an existing order.
+
+    Parameters
+    ----------
+    trader_id : TraderId
+        The trader ID for the command.
+    strategy_id : StrategyId
+        The strategy ID for the command.
+    instrument_id : InstrumentId
+        The instrument ID for the command.
+    client_order_id : VenueOrderId
+        The client order ID to update.
+    venue_order_id : VenueOrderId, optional
+        The venue order ID (assigned by the venue) to update.
+    quantity : Quantity, optional
+        The quantity for the order update.
+    price : Price, optional
+        The price for the order update.
+    trigger_price : Price, optional
+        The trigger price for the order update.
+    command_id : UUID4
+        The command ID.
+    ts_init : uint64_t
+        The UNIX timestamp (nanoseconds) when the object was initialized.
+    client_id : ClientId, optional
+        The execution client ID for the command.
+
+    References
+    ----------
+    https://www.onixs.biz/fix-dictionary/5.0.SP2/msgType_G_71.html
+    """
+
+    def __init__(
+        self,
+        TraderId trader_id not None,
+        StrategyId strategy_id not None,
+        InstrumentId instrument_id not None,
+        ClientOrderId client_order_id not None,
+        VenueOrderId venue_order_id: Optional[VenueOrderId],
+        Quantity quantity: Optional[Quantity],
+        Price price: Optional[Price],
+        Price trigger_price: Optional[Price],
+        UUID4 command_id not None,
+        uint64_t ts_init,
+        ClientId client_id=None,
+    ):
+        super().__init__(
+            client_id=client_id,
+            trader_id=trader_id,
+            strategy_id=strategy_id,
+            instrument_id=instrument_id,
+            command_id=command_id,
+            ts_init=ts_init,
+        )
+
         self.client_order_id = client_order_id
         self.venue_order_id = venue_order_id
-        self.venue_position_id = venue_position_id
-        self.id = execution_id
-        self.last_qty = last_qty
-        self.last_px = last_px
-        self.commission = commission
-        self.liquidity_side = liquidity_side
-        self.ts_event = ts_event
-        self.ts_init = ts_init
+        self.quantity = quantity
+        self.price = price
+        self.trigger_price = trigger_price
+
+    def __str__(self) -> str:
+        return (
+            f"{type(self).__name__}("
+            f"instrument_id={self.instrument_id.to_str()}, "
+            f"client_order_id={self.client_order_id.to_str()}, "
+            f"venue_order_id={self.venue_order_id}, "  # Can be None
+            f"quantity={self.quantity.to_str()}, "
+            f"price={self.price}, "
+            f"trigger_price={self.trigger_price})"
+        )
 
     def __repr__(self) -> str:
         return (
             f"{type(self).__name__}("
-            f"client_order_id={self.client_order_id.value}, "
-            f"venue_order_id={self.venue_order_id}, "
-            f"venue_position_id={self.venue_position_id}, "
-            f"id={self.id.value}, "
-            f"last_qty={self.last_qty}, "
-            f"last_px={self.last_px}, "
-            f"commission={self.commission.to_str()}, "
-            f"liquidity_side={LiquiditySideParser.to_str(self.liquidity_side)}, "
-            f"ts_event={self.ts_event}, "
+            f"client_id={self.client_id}, "  # Can be None
+            f"trader_id={self.trader_id.to_str()}, "
+            f"strategy_id={self.strategy_id.to_str()}, "
+            f"instrument_id={self.instrument_id.to_str()}, "
+            f"client_order_id={self.client_order_id.to_str()}, "
+            f"venue_order_id={self.venue_order_id}, "  # Can be None
+            f"quantity={self.quantity.to_str()}, "
+            f"price={self.price}, "
+            f"trigger_price={self.trigger_price}, "
+            f"command_id={self.id.to_str()}, "
             f"ts_init={self.ts_init})"
         )
 
+    @staticmethod
+    cdef ModifyOrder from_dict_c(dict values):
+        Condition.not_none(values, "values")
+        cdef str c = values["client_id"]
+        cdef str v = values["venue_order_id"]
+        cdef str q = values["quantity"]
+        cdef str p = values["price"]
+        cdef str t = values["trigger_price"]
+        return ModifyOrder(
+            client_id=ClientId(c) if c is not None else None,
+            trader_id=TraderId(values["trader_id"]),
+            strategy_id=StrategyId(values["strategy_id"]),
+            instrument_id=InstrumentId.from_str_c(values["instrument_id"]),
+            client_order_id=ClientOrderId(values["client_order_id"]),
+            venue_order_id=VenueOrderId(v) if v is not None else None,
+            quantity=Quantity.from_str_c(q) if q is not None else None,
+            price=Price.from_str_c(p) if p is not None else None,
+            trigger_price=Price.from_str_c(t) if t is not None else None,
+            command_id=UUID4(values["command_id"]),
+            ts_init=values["ts_init"],
+        )
 
-cdef class ExecutionMassStatus:
+    @staticmethod
+    cdef dict to_dict_c(ModifyOrder obj):
+        Condition.not_none(obj, "obj")
+        return {
+            "type": "ModifyOrder",
+            "client_id": obj.client_id.to_str() if obj.client_id is not None else None,
+            "trader_id": obj.trader_id.to_str(),
+            "strategy_id": obj.strategy_id.to_str(),
+            "instrument_id": obj.instrument_id.to_str(),
+            "client_order_id": obj.client_order_id.to_str(),
+            "venue_order_id": obj.venue_order_id.to_str() if obj.venue_order_id is not None else None,
+            "quantity": str(obj.quantity) if obj.quantity is not None else None,
+            "price": str(obj.price) if obj.price is not None else None,
+            "trigger_price": str(obj.trigger_price) if obj.trigger_price is not None else None,
+            "command_id": obj.id.to_str(),
+            "ts_init": obj.ts_init,
+        }
+
+    @staticmethod
+    def from_dict(dict values) -> ModifyOrder:
+        """
+        Return a modify order command from the given dict values.
+
+        Parameters
+        ----------
+        values : dict[str, object]
+            The values for initialization.
+
+        Returns
+        -------
+        ModifyOrder
+
+        """
+        return ModifyOrder.from_dict_c(values)
+
+    @staticmethod
+    def to_dict(ModifyOrder obj):
+        """
+        Return a dictionary representation of this object.
+
+        Returns
+        -------
+        dict[str, object]
+
+        """
+        return ModifyOrder.to_dict_c(obj)
+
+
+cdef class CancelOrder(TradingCommand):
     """
-    Represents a mass status report of execution status.
+    Represents a command to cancel an order.
 
     Parameters
     ----------
-    client_id : ClientId
-        The client ID for the report.
-    account_id : AccountId
-        The account ID for the report.
-    ts_init : int64
+    trader_id : TraderId
+        The trader ID for the command.
+    strategy_id : StrategyId
+        The strategy ID for the command.
+    instrument_id : InstrumentId
+        The instrument ID for the command.
+    client_order_id : ClientOrderId
+        The client order ID to cancel.
+    venue_order_id : VenueOrderId, optional
+        The venue order ID (assigned by the venue) to cancel.
+    command_id : UUID4
+        The command ID.
+    ts_init : uint64_t
         The UNIX timestamp (nanoseconds) when the object was initialized.
+    client_id : ClientId, optional
+        The execution client ID for the command.
+
+    References
+    ----------
+    https://www.onixs.biz/fix-dictionary/5.0.SP2/msgType_F_70.html
     """
 
     def __init__(
         self,
-        ClientId client_id not None,
-        AccountId account_id not None,
-        int64_t ts_init,
+        TraderId trader_id not None,
+        StrategyId strategy_id not None,
+        InstrumentId instrument_id not None,
+        ClientOrderId client_order_id not None,
+        VenueOrderId venue_order_id: Optional[VenueOrderId],
+        UUID4 command_id not None,
+        uint64_t ts_init,
+        ClientId client_id=None,
     ):
-        self.client_id = client_id
-        self.account_id = account_id
-        self.ts_init = ts_init
+        if client_id is None:
+            client_id = ClientId(instrument_id.venue.to_str())
+        super().__init__(
+            client_id=client_id,
+            trader_id=trader_id,
+            strategy_id=strategy_id,
+            instrument_id=instrument_id,
+            command_id=command_id,
+            ts_init=ts_init,
+        )
 
-        self._order_reports = {}     # type: dict[VenueOrderId, OrderStatusReport]
-        self._exec_reports = {}      # type: dict[VenueOrderId, list[ExecutionReport]]
-        self._position_reports = {}  # type: dict[InstrumentId, PositionStatusReport]
+        self.client_order_id = client_order_id
+        self.venue_order_id = venue_order_id
+
+    def __str__(self) -> str:
+        return (
+            f"{type(self).__name__}("
+            f"instrument_id={self.instrument_id.to_str()}, "
+            f"client_order_id={self.client_order_id.to_str()}, "
+            f"venue_order_id={self.venue_order_id})"  # Can be None
+        )
+
+    def __repr__(self) -> str:
+        return (
+            f"{type(self).__name__}("
+            f"client_id={self.client_id}, "  # Can be None
+            f"trader_id={self.trader_id.to_str()}, "
+            f"strategy_id={self.strategy_id.to_str()}, "
+            f"instrument_id={self.instrument_id.to_str()}, "
+            f"client_order_id={self.client_order_id.to_str()}, "
+            f"venue_order_id={self.venue_order_id}, "  # Can be None
+            f"command_id={self.id.to_str()}, "
+            f"ts_init={self.ts_init})"
+        )
+
+    @staticmethod
+    cdef CancelOrder from_dict_c(dict values):
+        Condition.not_none(values, "values")
+        cdef str c = values["client_id"]
+        cdef str v = values["venue_order_id"]
+        return CancelOrder(
+            client_id=ClientId(c) if c is not None else None,
+            trader_id=TraderId(values["trader_id"]),
+            strategy_id=StrategyId(values["strategy_id"]),
+            instrument_id=InstrumentId.from_str_c(values["instrument_id"]),
+            client_order_id=ClientOrderId(values["client_order_id"]),
+            venue_order_id=VenueOrderId(v) if v is not None else None,
+            command_id=UUID4(values["command_id"]),
+            ts_init=values["ts_init"],
+        )
+
+    @staticmethod
+    cdef dict to_dict_c(CancelOrder obj):
+        Condition.not_none(obj, "obj")
+        return {
+            "type": "CancelOrder",
+            "client_id": obj.client_id.to_str() if obj.client_id is not None else None,
+            "trader_id": obj.trader_id.to_str(),
+            "strategy_id": obj.strategy_id.to_str(),
+            "instrument_id": obj.instrument_id.to_str(),
+            "client_order_id": obj.client_order_id.to_str(),
+            "venue_order_id": obj.venue_order_id.to_str() if obj.venue_order_id is not None else None,
+            "command_id": obj.id.to_str(),
+            "ts_init": obj.ts_init,
+        }
+
+    @staticmethod
+    def from_dict(dict values) -> CancelOrder:
+        """
+        Return a cancel order command from the given dict values.
+
+        Parameters
+        ----------
+        values : dict[str, object]
+            The values for initialization.
+
+        Returns
+        -------
+        CancelOrder
+
+        """
+        return CancelOrder.from_dict_c(values)
+
+    @staticmethod
+    def to_dict(CancelOrder obj):
+        """
+        Return a dictionary representation of this object.
+
+        Returns
+        -------
+        dict[str, object]
+
+        """
+        return CancelOrder.to_dict_c(obj)
+
+
+cdef class CancelAllOrders(TradingCommand):
+    """
+    Represents a command to cancel all orders for an instrument.
+
+    Parameters
+    ----------
+    trader_id : TraderId
+        The trader ID for the command.
+    strategy_id : StrategyId
+        The strategy ID for the command.
+    instrument_id : InstrumentId
+        The instrument ID for the command.
+    command_id : UUID4
+        The command ID.
+    ts_init : uint64_t
+        The UNIX timestamp (nanoseconds) when the object was initialized.
+    client_id : ClientId, optional
+        The execution client ID for the command.
+    """
+
+    def __init__(
+        self,
+        TraderId trader_id not None,
+        StrategyId strategy_id not None,
+        InstrumentId instrument_id not None,
+        UUID4 command_id not None,
+        uint64_t ts_init,
+        ClientId client_id=None,
+    ):
+        super().__init__(
+            client_id=client_id,
+            trader_id=trader_id,
+            strategy_id=strategy_id,
+            instrument_id=instrument_id,
+            command_id=command_id,
+            ts_init=ts_init,
+        )
+
+    def __str__(self) -> str:
+        return (
+            f"{type(self).__name__}("
+            f"instrument_id={self.instrument_id.to_str()})"
+        )
+
+    def __repr__(self) -> str:
+        return (
+            f"{type(self).__name__}("
+            f"client_id={self.client_id}, "  # Can be None
+            f"trader_id={self.trader_id.to_str()}, "
+            f"strategy_id={self.strategy_id.to_str()}, "
+            f"instrument_id={self.instrument_id.to_str()}, "
+            f"command_id={self.id.to_str()}, "
+            f"ts_init={self.ts_init})"
+        )
+
+    @staticmethod
+    cdef CancelAllOrders from_dict_c(dict values):
+        Condition.not_none(values, "values")
+        cdef str c = values["client_id"]
+        return CancelAllOrders(
+            client_id=ClientId(c) if c is not None else None,
+            trader_id=TraderId(values["trader_id"]),
+            strategy_id=StrategyId(values["strategy_id"]),
+            instrument_id=InstrumentId.from_str_c(values["instrument_id"]),
+            command_id=UUID4(values["command_id"]),
+            ts_init=values["ts_init"],
+        )
+
+    @staticmethod
+    cdef dict to_dict_c(CancelAllOrders obj):
+        Condition.not_none(obj, "obj")
+        return {
+            "type": "CancelAllOrders",
+            "client_id": obj.client_id.to_str() if obj.client_id is not None else None,
+            "trader_id": obj.trader_id.to_str(),
+            "strategy_id": obj.strategy_id.to_str(),
+            "instrument_id": obj.instrument_id.to_str(),
+            "command_id": obj.id.to_str(),
+            "ts_init": obj.ts_init,
+        }
+
+    @staticmethod
+    def from_dict(dict values) -> CancelAllOrders:
+        """
+        Return a cancel order command from the given dict values.
+
+        Parameters
+        ----------
+        values : dict[str, object]
+            The values for initialization.
+
+        Returns
+        -------
+        CancelAllOrders
+
+        """
+        return CancelAllOrders.from_dict_c(values)
+
+    @staticmethod
+    def to_dict(CancelAllOrders obj):
+        """
+        Return a dictionary representation of this object.
+
+        Returns
+        -------
+        dict[str, object]
+
+        """
+        return CancelAllOrders.to_dict_c(obj)
+
+
+cdef class QueryOrder(TradingCommand):
+    """
+    Represents a command to query an order.
+
+    Parameters
+    ----------
+    trader_id : TraderId
+        The trader ID for the command.
+    strategy_id : StrategyId
+        The strategy ID for the command.
+    instrument_id : InstrumentId
+        The instrument ID for the command.
+    client_order_id : ClientOrderId
+        The client order ID to cancel.
+    venue_order_id : VenueOrderId, optional
+        The venue order ID (assigned by the venue) to cancel.
+    command_id : UUID4
+        The command ID.
+    ts_init : uint64_t
+        The UNIX timestamp (nanoseconds) when the object was initialized.
+    client_id : ClientId, optional
+        The execution client ID for the command.
+    """
+
+    def __init__(
+        self,
+        TraderId trader_id not None,
+        StrategyId strategy_id not None,
+        InstrumentId instrument_id not None,
+        ClientOrderId client_order_id not None,
+        VenueOrderId venue_order_id: Optional[VenueOrderId],
+        UUID4 command_id not None,
+        uint64_t ts_init,
+        ClientId client_id=None,
+    ):
+        if client_id is None:
+            client_id = ClientId(instrument_id.venue.to_str())
+        super().__init__(
+            client_id=client_id,
+            trader_id=trader_id,
+            strategy_id=strategy_id,
+            instrument_id=instrument_id,
+            command_id=command_id,
+            ts_init=ts_init,
+        )
+
+        self.client_order_id = client_order_id
+        self.venue_order_id = venue_order_id
+
+    def __str__(self) -> str:
+        return (
+            f"{type(self).__name__}("
+            f"instrument_id={self.instrument_id.to_str()}, "
+            f"client_order_id={self.client_order_id.to_str()}, "
+            f"venue_order_id={self.venue_order_id})"  # Can be None
+        )
 
     def __repr__(self) -> str:
         return (
             f"{type(self).__name__}("
             f"client_id={self.client_id}, "
-            f"account_id={self.account_id}, "
-            f"order_reports={self._order_reports}, "
-            f"exec_reports={self._exec_reports}, "
-            f"position_reports={self._position_reports}, "
+            f"trader_id={self.trader_id.to_str()}, "
+            f"strategy_id={self.strategy_id.to_str()}, "
+            f"instrument_id={self.instrument_id.to_str()}, "
+            f"client_order_id={self.client_order_id.to_str()}, "
+            f"venue_order_id={self.venue_order_id}, "  # Can be None
+            f"command_id={self.id.to_str()}, "
             f"ts_init={self.ts_init})"
         )
 
-    cpdef dict order_reports(self):
+    @staticmethod
+    cdef QueryOrder from_dict_c(dict values):
+        Condition.not_none(values, "values")
+        cdef str c = values["client_id"]
+        cdef str v = values["venue_order_id"]
+        return QueryOrder(
+            client_id=ClientId(c) if c is not None else None,
+            trader_id=TraderId(values["trader_id"]),
+            strategy_id=StrategyId(values["strategy_id"]),
+            instrument_id=InstrumentId.from_str_c(values["instrument_id"]),
+            client_order_id=ClientOrderId(values["client_order_id"]),
+            venue_order_id=VenueOrderId(v) if v is not None else None,
+            command_id=UUID4(values["command_id"]),
+            ts_init=values["ts_init"],
+        )
+
+    @staticmethod
+    cdef dict to_dict_c(QueryOrder obj):
+        Condition.not_none(obj, "obj")
+        return {
+            "type": "QueryOrder",
+            "client_id": obj.client_id.to_str() if obj.client_id is not None else None,
+            "trader_id": obj.trader_id.to_str(),
+            "strategy_id": obj.strategy_id.to_str(),
+            "instrument_id": obj.instrument_id.to_str(),
+            "client_order_id": obj.client_order_id.to_str(),
+            "venue_order_id": obj.venue_order_id.to_str() if obj.venue_order_id is not None else None,
+            "command_id": obj.id.to_str(),
+            "ts_init": obj.ts_init,
+        }
+
+    @staticmethod
+    def from_dict(dict values) -> QueryOrder:
         """
-        Return the order status reports.
-
-        Returns
-        -------
-        dict[VenueOrderId, OrderStatusReport]
-
-        """
-        return self._order_reports.copy()
-
-    cpdef dict exec_reports(self):
-        """
-        Return the execution reports.
-
-        Returns
-        -------
-        dict[VenueOrderId, list[ExecutionReport]
-
-        """
-        return self._exec_reports.copy()
-
-    cpdef dict position_reports(self):
-        """
-        Return the position state reports.
-
-        Returns
-        -------
-        dict[InstrumentId, PositionStatusReport]
-
-        """
-        return self._position_reports.copy()
-
-    cpdef void add_order_report(self, OrderStatusReport report) except *:
-        """
-        Add the order status report.
+        Return a query order command from the given dict values.
 
         Parameters
         ----------
-        report : OrderStatusReport
-            The report to add.
+        values : dict[str, object]
+            The values for initialization.
 
-        """
-        Condition.not_none(report, "report")
-
-        self._order_reports[report.venue_order_id] = report
-
-    cpdef void add_exec_reports(self, VenueOrderId venue_order_id, list reports) except *:
-        """
-        Add the list of trades for the given order ID.
-
-        Parameters
-        ----------
-        venue_order_id : VenueOrderId
-            The venue order ID for the reports.
-        reports : list[ExecutionReport]
-            The list of execution reports to add.
-
-        Raises
+        Returns
         -------
-        TypeError
-            If `trades` contains a type other than `ExecutionReport`.
+        QueryOrder
 
         """
-        Condition.not_none(venue_order_id, "venue_order_id")
-        Condition.list_type(reports, ExecutionReport, "reports")
+        return QueryOrder.from_dict_c(values)
 
-        self._exec_reports[venue_order_id] = reports
-
-    cpdef void add_position_report(self, PositionStatusReport report) except *:
+    @staticmethod
+    def to_dict(QueryOrder obj):
         """
-        Add the position state report.
+        Return a dictionary representation of this object.
 
-        Parameters
-        ----------
-        report : PositionStatusReport
-            The report to add.
+        Returns
+        -------
+        dict[str, object]
 
         """
-        Condition.not_none(report, "report")
-
-        self._position_reports[report.instrument_id] = report
+        return QueryOrder.to_dict_c(obj)
