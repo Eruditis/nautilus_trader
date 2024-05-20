@@ -1,0 +1,4 @@
+(function() {var implementors = {
+"nautilus_adapters":[["impl FromU8 for <a class=\"enum\" href=\"nautilus_adapters/databento/enums/enum.DatabentoStatisticType.html\" title=\"enum nautilus_adapters::databento::enums::DatabentoStatisticType\">DatabentoStatisticType</a>"],["impl FromU8 for <a class=\"enum\" href=\"nautilus_adapters/databento/enums/enum.DatabentoStatisticUpdateAction.html\" title=\"enum nautilus_adapters::databento::enums::DatabentoStatisticUpdateAction\">DatabentoStatisticUpdateAction</a>"]],
+"nautilus_model":[]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

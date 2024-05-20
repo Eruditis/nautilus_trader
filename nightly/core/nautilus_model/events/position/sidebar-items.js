@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["PositionEvent"],"mod":["changed","closed","opened","state"]};

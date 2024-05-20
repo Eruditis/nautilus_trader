@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["venue_code_exists","venue_from_cstr_code","venue_hash","venue_is_synthetic","venue_new"]};
