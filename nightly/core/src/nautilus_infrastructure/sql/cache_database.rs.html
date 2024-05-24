@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `infrastructure/src/sql/cache_database.rs`."><title>cache_database.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="nautilus_infrastructure" data-themes="" data-resource-suffix="" data-rustdoc-version="1.80.0-nightly (d84b90375 2024-05-19)" data-channel="nightly" data-search-js="search-d52510db62a78183.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `infrastructure/src/sql/cache_database.rs`."><title>cache_database.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="nautilus_infrastructure" data-themes="" data-resource-suffix="" data-rustdoc-version="1.80.0-nightly (867900499 2024-05-23)" data-channel="nightly" data-search-js="search-d52510db62a78183.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -281,6 +281,19 @@
 <a href="#281" id="281">281</a>
 <a href="#282" id="282">282</a>
 <a href="#283" id="283">283</a>
+<a href="#284" id="284">284</a>
+<a href="#285" id="285">285</a>
+<a href="#286" id="286">286</a>
+<a href="#287" id="287">287</a>
+<a href="#288" id="288">288</a>
+<a href="#289" id="289">289</a>
+<a href="#290" id="290">290</a>
+<a href="#291" id="291">291</a>
+<a href="#292" id="292">292</a>
+<a href="#293" id="293">293</a>
+<a href="#294" id="294">294</a>
+<a href="#295" id="295">295</a>
+<a href="#296" id="296">296</a>
 </pre></div><pre class="rust"><code><span class="comment">// -------------------------------------------------------------------------------------------------
 //  Copyright (C) 2015-2024 Nautech Systems Pty Ltd. All rights reserved.
 //  https://nautechsystems.io
@@ -335,7 +348,7 @@
     Add(String, Vec&lt;u8&gt;),
     AddCurrency(Currency),
     AddInstrument(InstrumentAny),
-    AddOrder(OrderAny),
+    AddOrder(OrderAny, bool),
 }
 
 <span class="kw">fn </span>get_buffer_interval() -&gt; Duration {
@@ -393,52 +406,58 @@
                         </span>.unwrap()
                 }
             },
-            DatabaseQuery::AddOrder(order_any) =&gt; <span class="kw">match </span>order_any {
+            DatabaseQuery::AddOrder(order_any, updated) =&gt; <span class="kw">match </span>order_any {
                 OrderAny::Limit(order) =&gt; {
-                    DatabaseQueries::add_order(pool, <span class="string">"LIMIT"</span>, <span class="bool-val">false</span>, Box::new(order))
+                    DatabaseQueries::add_order(pool, <span class="string">"LIMIT"</span>, updated, Box::new(order))
                         .<span class="kw">await
                         </span>.unwrap()
                 }
                 OrderAny::LimitIfTouched(order) =&gt; {
-                    DatabaseQueries::add_order(pool, <span class="string">"LIMIT_IF_TOUCHED"</span>, <span class="bool-val">false</span>, Box::new(order))
+                    DatabaseQueries::add_order(pool, <span class="string">"LIMIT_IF_TOUCHED"</span>, updated, Box::new(order))
                         .<span class="kw">await
                         </span>.unwrap()
                 }
                 OrderAny::Market(order) =&gt; {
-                    DatabaseQueries::add_order(pool, <span class="string">"MARKET"</span>, <span class="bool-val">false</span>, Box::new(order))
+                    DatabaseQueries::add_order(pool, <span class="string">"MARKET"</span>, updated, Box::new(order))
                         .<span class="kw">await
                         </span>.unwrap()
                 }
                 OrderAny::MarketIfTouched(order) =&gt; {
-                    DatabaseQueries::add_order(pool, <span class="string">"MARKET_IF_TOUCHED"</span>, <span class="bool-val">false</span>, Box::new(order))
+                    DatabaseQueries::add_order(pool, <span class="string">"MARKET_IF_TOUCHED"</span>, updated, Box::new(order))
                         .<span class="kw">await
                         </span>.unwrap()
                 }
                 OrderAny::MarketToLimit(order) =&gt; {
-                    DatabaseQueries::add_order(pool, <span class="string">"MARKET_TO_LIMIT"</span>, <span class="bool-val">false</span>, Box::new(order))
+                    DatabaseQueries::add_order(pool, <span class="string">"MARKET_TO_LIMIT"</span>, updated, Box::new(order))
                         .<span class="kw">await
                         </span>.unwrap()
                 }
                 OrderAny::StopLimit(order) =&gt; {
-                    DatabaseQueries::add_order(pool, <span class="string">"STOP_LIMIT"</span>, <span class="bool-val">false</span>, Box::new(order))
+                    DatabaseQueries::add_order(pool, <span class="string">"STOP_LIMIT"</span>, updated, Box::new(order))
                         .<span class="kw">await
                         </span>.unwrap()
                 }
                 OrderAny::StopMarket(order) =&gt; {
-                    DatabaseQueries::add_order(pool, <span class="string">"STOP_MARKET"</span>, <span class="bool-val">false</span>, Box::new(order))
+                    DatabaseQueries::add_order(pool, <span class="string">"STOP_MARKET"</span>, updated, Box::new(order))
                         .<span class="kw">await
                         </span>.unwrap()
                 }
-                OrderAny::TrailingStopLimit(order) =&gt; {
-                    DatabaseQueries::add_order(pool, <span class="string">"TRAILING_STOP_LIMIT"</span>, <span class="bool-val">false</span>, Box::new(order))
-                        .<span class="kw">await
-                        </span>.unwrap()
-                }
-                OrderAny::TrailingStopMarket(order) =&gt; {
-                    DatabaseQueries::add_order(pool, <span class="string">"TRAILING_STOP_MARKET"</span>, <span class="bool-val">false</span>, Box::new(order))
-                        .<span class="kw">await
-                        </span>.unwrap()
-                }
+                OrderAny::TrailingStopLimit(order) =&gt; DatabaseQueries::add_order(
+                    pool,
+                    <span class="string">"TRAILING_STOP_LIMIT"</span>,
+                    updated,
+                    Box::new(order),
+                )
+                .<span class="kw">await
+                </span>.unwrap(),
+                OrderAny::TrailingStopMarket(order) =&gt; DatabaseQueries::add_order(
+                    pool,
+                    <span class="string">"TRAILING_STOP_MARKET"</span>,
+                    updated,
+                    Box::new(order),
+                )
+                .<span class="kw">await
+                </span>.unwrap(),
             },
         }
     }
@@ -551,7 +570,14 @@
     </span>}
 
     <span class="kw">pub async fn </span>add_order(<span class="kw-2">&amp;</span><span class="self">self</span>, order: OrderAny) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">let </span>query = DatabaseQuery::AddOrder(order);
+        <span class="kw">let </span>query = DatabaseQuery::AddOrder(order, <span class="bool-val">false</span>);
+        <span class="self">self</span>.tx.send(query).<span class="kw">await</span>.map_err(|err| {
+            <span class="macro">anyhow::anyhow!</span>(<span class="string">"Failed to send query add_order to database message handler: {err}"</span>)
+        })
+    }
+
+    <span class="kw">pub async fn </span>update_order(<span class="kw-2">&amp;</span><span class="self">self</span>, order: OrderAny) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">let </span>query = DatabaseQuery::AddOrder(order, <span class="bool-val">true</span>);
         <span class="self">self</span>.tx.send(query).<span class="kw">await</span>.map_err(|err| {
             <span class="macro">anyhow::anyhow!</span>(<span class="string">"Failed to send query add_order to database message handler: {err}"</span>)
         })
