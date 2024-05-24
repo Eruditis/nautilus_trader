@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["create_redis_connection","get_buffer_interval","get_redis_url","get_redis_version","get_timeout_duration"],"mod":["cache","msgbus"]};

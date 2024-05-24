@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["cstr_drop","cstr_to_bytes","cstr_to_str","cstr_to_ustr","optional_cstr_to_str","optional_cstr_to_ustr","pystr_to_string","str_to_cstr"]};

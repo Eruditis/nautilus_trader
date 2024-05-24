@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":["MONEY_MAX","MONEY_MIN"],"struct":["Money"]};

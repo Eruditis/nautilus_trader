@@ -1,3 +1,0 @@
-(function() {var implementors = {
-"nautilus_accounting":[["impl Account for <a class=\"struct\" href=\"nautilus_accounting/account/cash/struct.CashAccount.html\" title=\"struct nautilus_accounting::account::cash::CashAccount\">CashAccount</a>"],["impl Account for <a class=\"struct\" href=\"nautilus_accounting/account/margin/struct.MarginAccount.html\" title=\"struct nautilus_accounting::account::margin::MarginAccount\">MarginAccount</a>"]]
-};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

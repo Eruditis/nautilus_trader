@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["CancelOrderBuilderError"],"struct":["CancelOrder","CancelOrderBuilder"]};

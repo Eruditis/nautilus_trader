@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"mod":["currency","money","price","quantity"]};

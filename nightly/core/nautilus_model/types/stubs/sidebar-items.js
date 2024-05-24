@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["account_balance_test","margin_balance_test"],"struct":["account_balance_test","margin_balance_test"]};

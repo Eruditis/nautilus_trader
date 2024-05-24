@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["HttpMethod"],"struct":["HttpClient","HttpResponse","InnerHttpClient"]};

@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["logger_drop","logger_log","logging_init","logging_log_header","logging_log_sysinfo"],"struct":["LogGuard_API"]};

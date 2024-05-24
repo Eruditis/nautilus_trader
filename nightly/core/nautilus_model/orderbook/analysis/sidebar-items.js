@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["book_check_integrity","get_avg_px_for_quantity","get_quantity_for_price"]};

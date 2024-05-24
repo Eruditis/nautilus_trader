@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"struct":["EventHandler","MessageHandler","SafeMessageCallback","SafeTimeEventCallback"]};

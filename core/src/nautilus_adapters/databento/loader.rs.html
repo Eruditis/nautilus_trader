@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `adapters/src/databento/loader.rs`."><title>loader.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="nautilus_adapters" data-themes="" data-resource-suffix="" data-rustdoc-version="1.80.0-nightly (1a7397988 2024-05-17)" data-channel="nightly" data-search-js="search-d52510db62a78183.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `adapters/src/databento/loader.rs`."><title>loader.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="nautilus_adapters" data-themes="" data-resource-suffix="" data-rustdoc-version="1.80.0-nightly (867900499 2024-05-23)" data-channel="nightly" data-search-js="search-d52510db62a78183.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -320,6 +320,13 @@
 <a href="#320" id="320">320</a>
 <a href="#321" id="321">321</a>
 <a href="#322" id="322">322</a>
+<a href="#323" id="323">323</a>
+<a href="#324" id="324">324</a>
+<a href="#325" id="325">325</a>
+<a href="#326" id="326">326</a>
+<a href="#327" id="327">327</a>
+<a href="#328" id="328">328</a>
+<a href="#329" id="329">329</a>
 </pre></div><pre class="rust"><code><span class="comment">// -------------------------------------------------------------------------------------------------
 //  Copyright (C) 2015-2024 Nautech Systems Pty Ltd. All rights reserved.
 //  https://nautechsystems.io
@@ -342,6 +349,7 @@
     compat::InstrumentDefMsgV1,
     decode::{dbn::Decoder, DbnMetadata, DecodeStream},
 };
+<span class="kw">use </span>fallible_streaming_iterator::FallibleStreamingIterator;
 <span class="kw">use </span>indexmap::IndexMap;
 <span class="kw">use </span>nautilus_model::{
     data::Data,
@@ -349,7 +357,6 @@
     instruments::any::InstrumentAny,
     types::currency::Currency,
 };
-<span class="kw">use </span>streaming_iterator::StreamingIterator;
 <span class="kw">use </span>ustr::Ustr;
 
 <span class="kw">use super</span>::{
@@ -475,8 +482,9 @@
         <span class="kw">let </span><span class="kw-2">mut </span>dbn_stream = decoder.decode_stream::&lt;InstrumentDefMsgV1&gt;();
 
         <span class="prelude-val">Ok</span>(std::iter::from_fn(<span class="kw">move </span>|| {
-            dbn_stream.advance();
-
+            <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = dbn_stream.advance() {
+                <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(e.into()));
+            }
             <span class="kw">match </span>dbn_stream.get() {
                 <span class="prelude-val">Some</span>(rec) =&gt; {
                     <span class="kw">let </span>record = dbn::RecordRef::from(rec);
@@ -520,7 +528,9 @@
         <span class="kw">let </span>price_precision = Currency::USD().precision; <span class="comment">// Hard coded for now
 
         </span><span class="prelude-val">Ok</span>(std::iter::from_fn(<span class="kw">move </span>|| {
-            dbn_stream.advance();
+            <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = dbn_stream.advance() {
+                <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(e.into()));
+            }
             <span class="kw">match </span>dbn_stream.get() {
                 <span class="prelude-val">Some</span>(rec) =&gt; {
                     <span class="kw">let </span>record = dbn::RecordRef::from(rec);
@@ -565,7 +575,9 @@
         <span class="kw">let </span>price_precision = Currency::USD().precision; <span class="comment">// Hard coded for now
 
         </span><span class="prelude-val">Ok</span>(std::iter::from_fn(<span class="kw">move </span>|| {
-            dbn_stream.advance();
+            <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = dbn_stream.advance() {
+                <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(e.into()));
+            }
             <span class="kw">match </span>dbn_stream.get() {
                 <span class="prelude-val">Some</span>(rec) =&gt; {
                     <span class="kw">let </span>record = dbn::RecordRef::from(rec);
@@ -612,7 +624,9 @@
         <span class="kw">let </span>price_precision = Currency::USD().precision; <span class="comment">// Hard coded for now
 
         </span><span class="prelude-val">Ok</span>(std::iter::from_fn(<span class="kw">move </span>|| {
-            dbn_stream.advance();
+            <span class="kw">if let </span><span class="prelude-val">Err</span>(e) = dbn_stream.advance() {
+                <span class="kw">return </span><span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(e.into()));
+            }
             <span class="kw">match </span>dbn_stream.get() {
                 <span class="prelude-val">Some</span>(rec) =&gt; {
                     <span class="kw">let </span>record = dbn::RecordRef::from(rec);

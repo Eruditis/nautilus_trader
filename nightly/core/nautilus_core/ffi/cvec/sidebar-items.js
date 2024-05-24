@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["cvec_drop","cvec_new"],"struct":["CVec"]};

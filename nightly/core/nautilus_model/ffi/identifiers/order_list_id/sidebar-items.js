@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["order_list_id_hash","order_list_id_new"]};

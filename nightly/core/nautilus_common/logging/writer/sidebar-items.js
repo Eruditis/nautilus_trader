@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"struct":["FileWriter","FileWriterConfig","StderrWriter","StdoutWriter"],"trait":["LogWriter"]};

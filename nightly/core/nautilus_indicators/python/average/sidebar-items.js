@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"mod":["ama","dema","ema","hma","rma","sma","wma"]};

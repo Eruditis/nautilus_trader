@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"mod":["accepted","cancel_rejected","canceled","denied","emulated","event","expired","filled","initialized","modify_rejected","pending_cancel","pending_update","rejected","released","stubs","submitted","triggered","updated"],"trait":["OrderEvent"]};

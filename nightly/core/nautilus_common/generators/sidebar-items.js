@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"mod":["client_order_id","order_list_id","position_id"]};

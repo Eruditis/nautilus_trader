@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["money_add_assign","money_as_f64","money_from_raw","money_new","money_sub_assign"]};

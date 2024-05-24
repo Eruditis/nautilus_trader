@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["position_id_hash","position_id_new"]};

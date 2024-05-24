@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["LogEvent"],"fn":["log"],"struct":["LogGuard","LogLine","LogLineWrapper","Logger","LoggerConfig"]};

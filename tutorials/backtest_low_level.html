@@ -729,13 +729,13 @@
              </a>
             </li>
             <li class="md-nav__item">
-             <a class="md-nav__link" href="#adding-data">
-              Adding data
+             <a class="md-nav__link" href="#adding-venues">
+              Adding venues
              </a>
             </li>
             <li class="md-nav__item">
-             <a class="md-nav__link" href="#adding-venues">
-              Adding venues
+             <a class="md-nav__link" href="#adding-data">
+              Adding data
              </a>
             </li>
             <li class="md-nav__item">
@@ -860,6 +860,7 @@ with a TWAP execution algorithm on a simulated Binance Spot exchange using histo
 <span class="kn">from</span> <span class="nn">nautilus_trader.examples.strategies.ema_cross_twap</span> <span class="kn">import</span> <span class="n">EMACrossTWAPConfig</span>
 <span class="kn">from</span> <span class="nn">nautilus_trader.model.currencies</span> <span class="kn">import</span> <span class="n">ETH</span>
 <span class="kn">from</span> <span class="nn">nautilus_trader.model.currencies</span> <span class="kn">import</span> <span class="n">USDT</span>
+<span class="kn">from</span> <span class="nn">nautilus_trader.model.data</span> <span class="kn">import</span> <span class="n">BarType</span>
 <span class="kn">from</span> <span class="nn">nautilus_trader.model.enums</span> <span class="kn">import</span> <span class="n">AccountType</span>
 <span class="kn">from</span> <span class="nn">nautilus_trader.model.enums</span> <span class="kn">import</span> <span class="n">OmsType</span>
 <span class="kn">from</span> <span class="nn">nautilus_trader.model.identifiers</span> <span class="kn">import</span> <span class="n">TraderId</span>
@@ -994,6 +995,43 @@ to show the general configuration pattern:
           API reference for details of all configuration options available.
          </p>
         </section>
+        <section id="adding-venues">
+         <h2 id="adding-venues">
+          Adding venues
+          <a class="headerlink" href="#adding-venues" title="Permalink to this heading">
+           ¶
+          </a>
+         </h2>
+         <p>
+          We’ll need a venue to trade on, which should match the
+          <em>
+           market
+          </em>
+          data being added to the engine.
+         </p>
+         <p>
+          In this case we’ll setup a
+          <em>
+           simulated
+          </em>
+          Binance Spot exchange:
+         </p>
+         <div class="highlight-python notranslate">
+          <div class="highlight">
+           <pre><span></span><span class="c1"># Add a trading venue (multiple venues possible)</span>
+<span class="n">BINANCE</span> <span class="o">=</span> <span class="n">Venue</span><span class="p">(</span><span class="s2">"BINANCE"</span><span class="p">)</span>
+<span class="n">engine</span><span class="o">.</span><span class="n">add_venue</span><span class="p">(</span>
+    <span class="n">venue</span><span class="o">=</span><span class="n">BINANCE</span><span class="p">,</span>
+    <span class="n">oms_type</span><span class="o">=</span><span class="n">OmsType</span><span class="o">.</span><span class="n">NETTING</span><span class="p">,</span>
+    <span class="n">account_type</span><span class="o">=</span><span class="n">AccountType</span><span class="o">.</span><span class="n">CASH</span><span class="p">,</span>  <span class="c1"># Spot CASH account (not for perpetuals or futures)</span>
+    <span class="n">base_currency</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>  <span class="c1"># Multi-currency account</span>
+    <span class="n">starting_balances</span><span class="o">=</span><span class="p">[</span><span class="n">Money</span><span class="p">(</span><span class="mf">1_000_000.0</span><span class="p">,</span> <span class="n">USDT</span><span class="p">),</span> <span class="n">Money</span><span class="p">(</span><span class="mf">10.0</span><span class="p">,</span> <span class="n">ETH</span><span class="p">)],</span>
+<span class="p">)</span>
+
+</pre>
+          </div>
+         </div>
+        </section>
         <section id="adding-data">
          <h2 id="adding-data">
           Adding data
@@ -1031,43 +1069,6 @@ to show the general configuration pattern:
           <p>
            The amount of and variety of data types is only limited by machine resources and your imagination (custom types are possible).
           </p>
-         </div>
-        </section>
-        <section id="adding-venues">
-         <h2 id="adding-venues">
-          Adding venues
-          <a class="headerlink" href="#adding-venues" title="Permalink to this heading">
-           ¶
-          </a>
-         </h2>
-         <p>
-          We’ll need a venue to trade on, which should match the
-          <em>
-           market
-          </em>
-          data being added to the engine.
-         </p>
-         <p>
-          In this case we’ll setup a
-          <em>
-           simulated
-          </em>
-          Binance Spot exchange:
-         </p>
-         <div class="highlight-python notranslate">
-          <div class="highlight">
-           <pre><span></span><span class="c1"># Add a trading venue (multiple venues possible)</span>
-<span class="n">BINANCE</span> <span class="o">=</span> <span class="n">Venue</span><span class="p">(</span><span class="s2">"BINANCE"</span><span class="p">)</span>
-<span class="n">engine</span><span class="o">.</span><span class="n">add_venue</span><span class="p">(</span>
-    <span class="n">venue</span><span class="o">=</span><span class="n">BINANCE</span><span class="p">,</span>
-    <span class="n">oms_type</span><span class="o">=</span><span class="n">OmsType</span><span class="o">.</span><span class="n">NETTING</span><span class="p">,</span>
-    <span class="n">account_type</span><span class="o">=</span><span class="n">AccountType</span><span class="o">.</span><span class="n">CASH</span><span class="p">,</span>  <span class="c1"># Spot CASH account (not for perpetuals or futures)</span>
-    <span class="n">base_currency</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>  <span class="c1"># Multi-currency account</span>
-    <span class="n">starting_balances</span><span class="o">=</span><span class="p">[</span><span class="n">Money</span><span class="p">(</span><span class="mf">1_000_000.0</span><span class="p">,</span> <span class="n">USDT</span><span class="p">),</span> <span class="n">Money</span><span class="p">(</span><span class="mf">10.0</span><span class="p">,</span> <span class="n">ETH</span><span class="p">)],</span>
-<span class="p">)</span>
-
-</pre>
-          </div>
          </div>
          <div class="admonition note">
           <p class="admonition-title">

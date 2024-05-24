@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["OrderFilledBuilderError"],"struct":["OrderFilled","OrderFilledBuilder"]};

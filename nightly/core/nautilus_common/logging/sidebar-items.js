@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["init_logging","init_tracing","logging_clock_set_realtime_mode","logging_clock_set_static_mode","logging_clock_set_static_time","logging_is_colored","logging_is_initialized","logging_set_bypass","logging_shutdown","map_log_level_to_filter","parse_component_levels","parse_level_filter_str"],"mod":["headers","logger","writer"]};

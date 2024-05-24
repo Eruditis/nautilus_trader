@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["venue_order_id_hash","venue_order_id_new"]};
