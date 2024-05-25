@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["duration_since_unix_epoch","get_atomic_clock_realtime","get_atomic_clock_static"],"static":["ATOMIC_CLOCK_REALTIME","ATOMIC_CLOCK_STATIC"],"struct":["AtomicTime"]};

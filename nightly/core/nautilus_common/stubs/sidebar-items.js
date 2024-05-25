@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["order_factory"],"struct":["order_factory"]};

@@ -1,0 +1,3 @@
+(function() {var implementors = {
+"nautilus_cli":[["impl Args for <a class=\"struct\" href=\"nautilus_cli/opt/struct.DatabaseConfig.html\" title=\"struct nautilus_cli::opt::DatabaseConfig\">DatabaseConfig</a>"],["impl Args for <a class=\"struct\" href=\"nautilus_cli/opt/struct.DatabaseOpt.html\" title=\"struct nautilus_cli::opt::DatabaseOpt\">DatabaseOpt</a>"],["impl Args for <a class=\"struct\" href=\"nautilus_cli/opt/struct.NautilusCli.html\" title=\"struct nautilus_cli::opt::NautilusCli\">NautilusCli</a>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

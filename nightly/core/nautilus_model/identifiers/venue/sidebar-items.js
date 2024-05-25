@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["SYNTHETIC_VENUE"],"struct":["Venue"]};
