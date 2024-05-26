@@ -3,7 +3,7 @@ pub unsafe extern &quot;C&quot; fn test_clock_advance_time(
     clock: &amp;mut <a class="struct" href="struct.TestClock_API.html" title="struct nautilus_common::ffi::clock::TestClock_API">TestClock_API</a>,
     to_time_ns: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u64.html">u64</a>,
     set_time: <a class="primitive" href="https://doc.rust-lang.org/nightly/std/primitive.u8.html">u8</a>
-) -&gt; <a class="struct" href="../../../nautilus_core/ffi/cvec/struct.CVec.html" title="struct nautilus_core::ffi::cvec::CVec">CVec</a></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h2>
+) -&gt; CVec</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><h2 id="safety"><a class="doc-anchor" href="#safety">§</a>Safety</h2>
 <ul>
 <li>Assumes <code>set_time</code> is a correct <code>uint8_t</code> of either 0 or 1.</li>
 </ul>

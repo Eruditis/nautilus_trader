@@ -1150,7 +1150,7 @@
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
 
-</span><span class="doccomment">//! Defines enumerations for the trading domain model.
+</span><span class="doccomment">//! Enumerations for the trading domain model.
 
 </span><span class="kw">use </span>std::str::FromStr;
 
@@ -2069,7 +2069,7 @@
 )]
 #[allow(non_camel_case_types)]
 </span><span class="kw">pub enum </span>RecordFlag {
-    <span class="doccomment">/// Last message in the packet from the venue for a given `instrument_id`.
+    <span class="doccomment">/// Last message in the book event or packet from the venue for a given `instrument_id`.
     </span>F_LAST = <span class="number">1 </span>&lt;&lt; <span class="number">7</span>, <span class="comment">// 128
     </span><span class="doccomment">/// Top-of-book message, not an individual order.
     </span>F_TOB = <span class="number">1 </span>&lt;&lt; <span class="number">6</span>, <span class="comment">// 64
