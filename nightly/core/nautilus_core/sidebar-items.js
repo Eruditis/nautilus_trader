@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["correctness","datetime","deserialization","equality","ffi","message","nanos","parsing","python","serialization","time","uuid"]};
+window.SIDEBAR_ITEMS = {"mod":["correctness","datetime","equality","ffi","message","nanos","parsing","python","serialization","time","uuid"]};
