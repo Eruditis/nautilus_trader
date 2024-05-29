@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["RedisCacheDatabase"]};
+window.SIDEBAR_ITEMS = {"enum":["DatabaseOperation"],"struct":["DatabaseCommand","RedisCacheDatabase","RedisCacheDatabaseAdapter"]};

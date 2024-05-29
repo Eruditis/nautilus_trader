@@ -6522,6 +6522,14 @@ types as values.
            <em class="sig-param">
             <span class="n">
              <span class="pre">
+              buffer_deltas=False
+             </span>
+            </span>
+           </em>
+           ,
+           <em class="sig-param">
+            <span class="n">
+             <span class="pre">
               debug=False)
              </span>
             </span>
@@ -19074,6 +19082,40 @@ types as values.
            <em class="sig-param">
             <span class="n">
              <span class="pre">
+              buffer_deltas
+             </span>
+            </span>
+            <span class="p">
+             <span class="pre">
+              :
+             </span>
+            </span>
+            <span class="w">
+            </span>
+            <span class="n">
+             <span class="pre">
+              bool
+             </span>
+            </span>
+            <span class="w">
+            </span>
+            <span class="o">
+             <span class="pre">
+              =
+             </span>
+            </span>
+            <span class="w">
+            </span>
+            <span class="default_value">
+             <span class="pre">
+              False
+             </span>
+            </span>
+           </em>
+           ,
+           <em class="sig-param">
+            <span class="n">
+             <span class="pre">
               debug
              </span>
             </span>
@@ -19217,6 +19259,24 @@ If False then will timestamp on bar open.
                  default False
                 </em>
                 ) – If data objects timestamp sequencing will be validated and handled.
+               </p>
+              </li>
+              <li>
+               <p>
+                <strong>
+                 buffer_deltas
+                </strong>
+                (
+                <em>
+                 bool
+                </em>
+                <em>
+                 ,
+                </em>
+                <em>
+                 default False
+                </em>
+                ) – If order book deltas should be buffered until the F_LAST flag is set for a delta.
                </p>
               </li>
               <li>
@@ -21949,6 +22009,40 @@ types as values.
             <span class="n">
              <span class="pre">
               validate_data_sequence
+             </span>
+            </span>
+            <span class="p">
+             <span class="pre">
+              :
+             </span>
+            </span>
+            <span class="w">
+            </span>
+            <span class="n">
+             <span class="pre">
+              bool
+             </span>
+            </span>
+            <span class="w">
+            </span>
+            <span class="o">
+             <span class="pre">
+              =
+             </span>
+            </span>
+            <span class="w">
+            </span>
+            <span class="default_value">
+             <span class="pre">
+              False
+             </span>
+            </span>
+           </em>
+           ,
+           <em class="sig-param">
+            <span class="n">
+             <span class="pre">
+              buffer_deltas
              </span>
             </span>
             <span class="p">
@@ -27080,6 +27174,14 @@ types as values.
             <span class="n">
              <span class="pre">
               validate_data_sequence=False
+             </span>
+            </span>
+           </em>
+           ,
+           <em class="sig-param">
+            <span class="n">
+             <span class="pre">
+              buffer_deltas=False
              </span>
             </span>
            </em>

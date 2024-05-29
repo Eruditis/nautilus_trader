@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `common/src/cache/core.rs`."><title>core.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="nautilus_common" data-themes="" data-resource-suffix="" data-rustdoc-version="1.80.0-nightly (1ba35e9bb 2024-05-25)" data-channel="nightly" data-search-js="search-d52510db62a78183.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `common/src/cache/core.rs`."><title>core.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="nautilus_common" data-themes="" data-resource-suffix="" data-rustdoc-version="1.80.0-nightly (da159eb33 2024-05-28)" data-channel="nightly" data-search-js="search-d52510db62a78183.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -2933,6 +2933,7 @@
 <a href="#2933" id="2933">2933</a>
 <a href="#2934" id="2934">2934</a>
 <a href="#2935" id="2935">2935</a>
+<a href="#2936" id="2936">2936</a>
 </pre></div><pre class="rust"><code><span class="comment">// -------------------------------------------------------------------------------------------------
 //  Copyright (C) 2015-2024 Nautech Systems Pty Ltd. All rights reserved.
 //  https://nautechsystems.io
@@ -3111,7 +3112,7 @@
 </span><span class="kw">pub struct </span>Cache {
     config: CacheConfig,
     index: CacheIndex,
-    database: <span class="prelude-ty">Option</span>&lt;CacheDatabaseAdapter&gt;,
+    database: <span class="prelude-ty">Option</span>&lt;Box&lt;<span class="kw">dyn </span>CacheDatabaseAdapter&gt;&gt;,
     general: HashMap&lt;String, Vec&lt;u8&gt;&gt;,
     quotes: HashMap&lt;InstrumentId, VecDeque&lt;QuoteTick&gt;&gt;,
     trades: HashMap&lt;InstrumentId, VecDeque&lt;TradeTick&gt;&gt;,
@@ -3137,7 +3138,7 @@
 <span class="kw">impl </span>Cache {
     <span class="doccomment">/// Creates a new [`Cache`] instance.
     </span><span class="attr">#[must_use]
-    </span><span class="kw">pub fn </span>new(config: CacheConfig, database: <span class="prelude-ty">Option</span>&lt;CacheDatabaseAdapter&gt;) -&gt; <span class="self">Self </span>{
+    </span><span class="kw">pub fn </span>new(config: CacheConfig, database: <span class="prelude-ty">Option</span>&lt;Box&lt;<span class="kw">dyn </span>CacheDatabaseAdapter&gt;&gt;) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>index = CacheIndex {
             venue_account: HashMap::new(),
             venue_orders: HashMap::new(),
@@ -3193,7 +3194,7 @@
 
     </span><span class="doccomment">/// Clears the current general cache and loads the general objects from the cache database.
     </span><span class="kw">pub fn </span>cache_general(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="self">self</span>.general = <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.database {
+        <span class="self">self</span>.general = <span class="kw">match </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.database {
             <span class="prelude-val">Some</span>(db) =&gt; db.load()<span class="question-mark">?</span>,
             <span class="prelude-val">None </span>=&gt; HashMap::new(),
         };
@@ -3207,7 +3208,7 @@
 
     <span class="doccomment">/// Clears the current currencies cache and loads currencies from the cache database.
     </span><span class="kw">pub fn </span>cache_currencies(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="self">self</span>.currencies = <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.database {
+        <span class="self">self</span>.currencies = <span class="kw">match </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.database {
             <span class="prelude-val">Some</span>(db) =&gt; db.load_currencies()<span class="question-mark">?</span>,
             <span class="prelude-val">None </span>=&gt; HashMap::new(),
         };
@@ -3218,7 +3219,7 @@
 
     <span class="doccomment">/// Clears the current instruments cache and loads instruments from the cache database.
     </span><span class="kw">pub fn </span>cache_instruments(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="self">self</span>.instruments = <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.database {
+        <span class="self">self</span>.instruments = <span class="kw">match </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.database {
             <span class="prelude-val">Some</span>(db) =&gt; db.load_instruments()<span class="question-mark">?</span>,
             <span class="prelude-val">None </span>=&gt; HashMap::new(),
         };
@@ -3230,7 +3231,7 @@
     <span class="doccomment">/// Clears the current synthetic instruments cache and loads synthetic instruments from the cache
     /// database.
     </span><span class="kw">pub fn </span>cache_synthetics(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="self">self</span>.synthetics = <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.database {
+        <span class="self">self</span>.synthetics = <span class="kw">match </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.database {
             <span class="prelude-val">Some</span>(db) =&gt; db.load_synthetics()<span class="question-mark">?</span>,
             <span class="prelude-val">None </span>=&gt; HashMap::new(),
         };
@@ -3244,7 +3245,7 @@
 
     <span class="doccomment">/// Clears the current accounts cache and loads accounts from the cache database.
     </span><span class="kw">pub fn </span>cache_accounts(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="self">self</span>.accounts = <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.database {
+        <span class="self">self</span>.accounts = <span class="kw">match </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.database {
             <span class="prelude-val">Some</span>(db) =&gt; db.load_accounts()<span class="question-mark">?</span>,
             <span class="prelude-val">None </span>=&gt; HashMap::new(),
         };
@@ -3258,7 +3259,7 @@
 
     <span class="doccomment">/// Clears the current orders cache and loads orders from the cache database.
     </span><span class="kw">pub fn </span>cache_orders(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="self">self</span>.orders = <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.database {
+        <span class="self">self</span>.orders = <span class="kw">match </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.database {
             <span class="prelude-val">Some</span>(db) =&gt; db.load_orders()<span class="question-mark">?</span>,
             <span class="prelude-val">None </span>=&gt; HashMap::new(),
         };
@@ -3269,7 +3270,7 @@
 
     <span class="doccomment">/// Clears the current positions cache and loads positions from the cache database.
     </span><span class="kw">pub fn </span>cache_positions(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="self">self</span>.positions = <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.database {
+        <span class="self">self</span>.positions = <span class="kw">match </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.database {
             <span class="prelude-val">Some</span>(db) =&gt; db.load_positions()<span class="question-mark">?</span>,
             <span class="prelude-val">None </span>=&gt; HashMap::new(),
         };
@@ -3873,8 +3874,8 @@
     }
 
     <span class="doccomment">/// Dispose of the cache which will close any underlying database adapter.
-    </span><span class="kw">pub fn </span>dispose(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(database) = <span class="kw-2">&amp;</span><span class="self">self</span>.database {
+    </span><span class="kw">pub fn </span>dispose(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(database) = <span class="kw-2">&amp;mut </span><span class="self">self</span>.database {
             <span class="comment">// TODO: Log operations in database adapter
             </span>database.close()<span class="question-mark">?</span>;
         }
@@ -3882,8 +3883,8 @@
     }
 
     <span class="doccomment">/// Flushes the caches database which permanently removes all persisted data.
-    </span><span class="kw">pub fn </span>flush_db(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(database) = <span class="kw-2">&amp;</span><span class="self">self</span>.database {
+    </span><span class="kw">pub fn </span>flush_db(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(database) = <span class="kw-2">&amp;mut </span><span class="self">self</span>.database {
             <span class="comment">// TODO: Log operations in database adapter
             </span>database.flush()<span class="question-mark">?</span>;
         }
@@ -3901,7 +3902,7 @@
         <span class="macro">debug!</span>(<span class="string">"Adding general {key}"</span>);
         <span class="self">self</span>.general.insert(key.to_string(), value.clone());
 
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(database) = <span class="kw-2">&amp;</span><span class="self">self</span>.database {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(database) = <span class="kw-2">&amp;mut </span><span class="self">self</span>.database {
             database.add(key.to_string(), value)<span class="question-mark">?</span>;
         }
         <span class="prelude-val">Ok</span>(())
@@ -4002,7 +4003,7 @@
     </span><span class="kw">pub fn </span>add_currency(<span class="kw-2">&amp;mut </span><span class="self">self</span>, currency: Currency) -&gt; anyhow::Result&lt;()&gt; {
         <span class="macro">debug!</span>(<span class="string">"Adding `Currency` {}"</span>, currency.code);
 
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(database) = <span class="kw-2">&amp;</span><span class="self">self</span>.database {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(database) = <span class="kw-2">&amp;mut </span><span class="self">self</span>.database {
             database.add_currency(<span class="kw-2">&amp;</span>currency)<span class="question-mark">?</span>;
         }
 
@@ -4014,7 +4015,7 @@
     </span><span class="kw">pub fn </span>add_instrument(<span class="kw-2">&amp;mut </span><span class="self">self</span>, instrument: InstrumentAny) -&gt; anyhow::Result&lt;()&gt; {
         <span class="macro">debug!</span>(<span class="string">"Adding `Instrument` {}"</span>, instrument.id());
 
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(database) = <span class="kw-2">&amp;</span><span class="self">self</span>.database {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(database) = <span class="kw-2">&amp;mut </span><span class="self">self</span>.database {
             database.add_instrument(<span class="kw-2">&amp;</span>instrument)<span class="question-mark">?</span>;
         }
 
@@ -4026,7 +4027,7 @@
     </span><span class="kw">pub fn </span>add_synthetic(<span class="kw-2">&amp;mut </span><span class="self">self</span>, synthetic: SyntheticInstrument) -&gt; anyhow::Result&lt;()&gt; {
         <span class="macro">debug!</span>(<span class="string">"Adding `SyntheticInstrument` {}"</span>, synthetic.id);
 
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(database) = <span class="kw-2">&amp;</span><span class="self">self</span>.database {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(database) = <span class="kw-2">&amp;mut </span><span class="self">self</span>.database {
             database.add_synthetic(<span class="kw-2">&amp;</span>synthetic)<span class="question-mark">?</span>;
         }
 
@@ -4038,7 +4039,7 @@
     </span><span class="kw">pub fn </span>add_account(<span class="kw-2">&amp;mut </span><span class="self">self</span>, account: Box&lt;<span class="kw">dyn </span>Account&gt;) -&gt; anyhow::Result&lt;()&gt; {
         <span class="macro">debug!</span>(<span class="string">"Adding `Account` {}"</span>, account.id());
 
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(database) = <span class="kw-2">&amp;</span><span class="self">self</span>.database {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(database) = <span class="kw-2">&amp;mut </span><span class="self">self</span>.database {
             database.add_account(account.as_ref())<span class="question-mark">?</span>;
         }
 
@@ -5452,7 +5453,7 @@
     <span class="kw">use </span>nautilus_core::{nanos::UnixNanos, uuid::UUID4};
     <span class="kw">use </span>nautilus_model::{
         data::{bar::Bar, quote::QuoteTick, trade::TradeTick},
-        enums::OrderSide,
+        enums::{OrderSide, OrderStatus},
         events::order::{accepted::OrderAccepted, event::OrderEventAny, submitted::OrderSubmitted},
         identifiers::{
             account_id::AccountId, client_order_id::ClientOrderId, position_id::PositionId,
@@ -5464,8 +5465,8 @@
         },
         orders::{any::OrderAny, stubs::TestOrderStubs},
         polymorphism::{
-            ApplyOrderEventAny, GetAccountId, GetClientOrderId, GetInstrumentId, GetStrategyId,
-            GetTraderId, GetVenueOrderId, IsOpen,
+            ApplyOrderEventAny, GetAccountId, GetClientOrderId, GetInstrumentId, GetOrderStatus,
+            GetStrategyId, GetTraderId, GetVenueOrderId, IsOpen,
         },
         types::{price::Price, quantity::Quantity},
     };
@@ -5494,21 +5495,21 @@
     }
 
     <span class="attr">#[rstest]
-    </span><span class="kw">fn </span>test_dispose_when_empty(cache: Cache) {
+    </span><span class="kw">fn </span>test_dispose_when_empty(<span class="kw-2">mut </span>cache: Cache) {
         <span class="kw">let </span>result = cache.dispose();
         <span class="macro">assert!</span>(result.is_ok());
     }
 
     <span class="attr">#[rstest]
-    </span><span class="kw">fn </span>test_flush_db_when_empty(cache: Cache) {
+    </span><span class="kw">fn </span>test_flush_db_when_empty(<span class="kw-2">mut </span>cache: Cache) {
         <span class="kw">let </span>result = cache.flush_db();
         <span class="macro">assert!</span>(result.is_ok());
     }
 
     <span class="attr">#[rstest]
     </span><span class="kw">fn </span>test_check_residuals_when_empty(cache: Cache) {
-        <span class="kw">let </span>result = cache.flush_db();
-        <span class="macro">assert!</span>(result.is_ok());
+        <span class="kw">let </span>result = cache.check_residuals();
+        <span class="macro">assert!</span>(!result);
     }
 
     <span class="attr">#[rstest]
@@ -5626,22 +5627,23 @@
 
         <span class="kw">let </span>result = cache.order(<span class="kw-2">&amp;</span>order.client_order_id()).unwrap();
 
+        <span class="macro">assert_eq!</span>(order.status(), OrderStatus::Submitted);
         <span class="macro">assert_eq!</span>(result, <span class="kw-2">&amp;</span>order);
         <span class="macro">assert_eq!</span>(cache.orders(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>), <span class="macro">vec!</span>[<span class="kw-2">&amp;</span>order]);
         <span class="macro">assert!</span>(cache.orders_open(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>).is_empty());
         <span class="macro">assert!</span>(cache.orders_closed(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>).is_empty());
         <span class="macro">assert!</span>(cache.orders_emulated(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>).is_empty());
-        <span class="macro">assert!</span>(cache.orders_inflight(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>).is_empty());
+        <span class="macro">assert!</span>(!cache.orders_inflight(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>).is_empty());
         <span class="macro">assert!</span>(cache.order_exists(<span class="kw-2">&amp;</span>order.client_order_id()));
         <span class="macro">assert!</span>(!cache.is_order_open(<span class="kw-2">&amp;</span>order.client_order_id()));
         <span class="macro">assert!</span>(!cache.is_order_closed(<span class="kw-2">&amp;</span>order.client_order_id()));
         <span class="macro">assert!</span>(!cache.is_order_emulated(<span class="kw-2">&amp;</span>order.client_order_id()));
-        <span class="macro">assert!</span>(!cache.is_order_inflight(<span class="kw-2">&amp;</span>order.client_order_id()));
+        <span class="macro">assert!</span>(cache.is_order_inflight(<span class="kw-2">&amp;</span>order.client_order_id()));
         <span class="macro">assert!</span>(!cache.is_order_pending_cancel_local(<span class="kw-2">&amp;</span>order.client_order_id()));
         <span class="macro">assert_eq!</span>(cache.orders_open_count(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>), <span class="number">0</span>);
         <span class="macro">assert_eq!</span>(cache.orders_closed_count(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>), <span class="number">0</span>);
         <span class="macro">assert_eq!</span>(cache.orders_emulated_count(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>), <span class="number">0</span>);
-        <span class="macro">assert_eq!</span>(cache.orders_inflight_count(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>), <span class="number">0</span>);
+        <span class="macro">assert_eq!</span>(cache.orders_inflight_count(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>), <span class="number">1</span>);
         <span class="macro">assert_eq!</span>(cache.orders_total_count(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>), <span class="number">1</span>);
         <span class="macro">assert_eq!</span>(cache.venue_order_id(<span class="kw-2">&amp;</span>order.client_order_id()), <span class="prelude-val">None</span>);
     }

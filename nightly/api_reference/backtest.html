@@ -2275,6 +2275,15 @@
                </a>
               </li>
               <li class="md-nav__item">
+               <a class="md-nav__link" href="#nautilus_trader.backtest.exchange.SimulatedExchange.use_message_queue">
+                <code class="docutils literal notranslate">
+                 <span class="pre">
+                  SimulatedExchange.use_message_queue
+                 </span>
+                </code>
+               </a>
+              </li>
+              <li class="md-nav__item">
                <a class="md-nav__link" href="#nautilus_trader.backtest.exchange.SimulatedExchange.use_position_ids">
                 <code class="docutils literal notranslate">
                  <span class="pre">
@@ -14061,12 +14070,6 @@ following the run iterations.
             list
            </span>
            <span class="pre">
-            instruments,
-           </span>
-           <span class="pre">
-            list
-           </span>
-           <span class="pre">
             modules,
            </span>
            <span class="pre">
@@ -14163,7 +14166,13 @@ following the run iterations.
             bool
            </span>
            <span class="pre">
-            use_reduce_only=True
+            use_reduce_only=True,
+           </span>
+           <span class="pre">
+            bool
+           </span>
+           <span class="pre">
+            use_message_queue=True
            </span>
           </em>
           <span class="sig-paren">
@@ -14333,6 +14342,27 @@ following the run iterations.
              <li>
               <p>
                <strong>
+                modules
+               </strong>
+               (
+               <em>
+                list
+               </em>
+               <em>
+                [
+               </em>
+               <em>
+                SimulatedModule
+               </em>
+               <em>
+                ]
+               </em>
+               ) – The simulation modules for the exchange.
+              </p>
+             </li>
+             <li>
+              <p>
+               <strong>
                 portfolio
                </strong>
                (
@@ -14370,6 +14400,20 @@ following the run iterations.
                 </em>
                </a>
                ) – The read-only cache for the exchange.
+              </p>
+             </li>
+             <li>
+              <p>
+               <strong>
+                clock
+               </strong>
+               (
+               <a class="reference internal" href="common.html#nautilus_trader.common.component.TestClock" title="nautilus_trader.common.component.TestClock">
+                <em>
+                 TestClock
+                </em>
+               </a>
+               ) – The clock for the exchange.
               </p>
              </li>
              <li>
@@ -14418,20 +14462,6 @@ following the run iterations.
                 optional
                </em>
                ) – The latency model for the exchange.
-              </p>
-             </li>
-             <li>
-              <p>
-               <strong>
-                clock
-               </strong>
-               (
-               <a class="reference internal" href="common.html#nautilus_trader.common.component.TestClock" title="nautilus_trader.common.component.TestClock">
-                <em>
-                 TestClock
-                </em>
-               </a>
-               ) – The clock for the exchange.
               </p>
              </li>
              <li>
@@ -14515,7 +14545,7 @@ following the run iterations.
                <em>
                 default True
                </em>
-               ) – If orders with GTD time in force will be supported by the venue.
+               ) – If orders with GTD time in force will be supported by the exchange.
               </p>
              </li>
              <li>
@@ -14533,7 +14563,7 @@ following the run iterations.
                <em>
                 default True
                </em>
-               ) – If contingent orders will be supported/respected by the venue.
+               ) – If contingent orders will be supported/respected by the exchange.
 If False then its expected the strategy will be managing any contingent orders.
               </p>
              </li>
@@ -14570,7 +14600,7 @@ If False then its expected the strategy will be managing any contingent orders.
                <em>
                 default False
                </em>
-               ) – If all venue generated identifiers will be random UUID4’s.
+               ) – If all exchange generated identifiers will be random UUID4’s.
               </p>
              </li>
              <li>
@@ -14593,6 +14623,27 @@ If False then its expected the strategy will be managing any contingent orders.
                 reduce_only
                </cite>
                execution instruction on orders will be honored.
+              </p>
+             </li>
+             <li>
+              <p>
+               <strong>
+                use_message_queue
+               </strong>
+               (
+               <em>
+                bool
+               </em>
+               <em>
+                ,
+               </em>
+               <em>
+                default True
+               </em>
+               ) – If an internal message queue should be used to process trading commands in sequence after
+they have initially arrived. Setting this to False would be appropriate for real-time
+sandbox environments, where we don’t want to introduce additional latency of waiting for
+the next data event before processing the trading command.
               </p>
              </li>
             </ul>
@@ -14771,10 +14822,7 @@ If False then its expected the strategy will be managing any contingent orders.
            </dt>
            <dd>
             <p>
-             Add the given instrument to the venue.
-            </p>
-            <p>
-             A random and unique 32-bit unsigned integer raw ID will be generated.
+             Add the given instrument to the exchange.
             </p>
             <dl class="field-list simple">
              <dt class="field-odd">
@@ -16320,7 +16368,7 @@ If False then its expected the strategy will be managing any contingent orders.
            </dt>
            <dd>
             <p>
-             Process the exchange to the gives time.
+             Process the exchange to the given time.
             </p>
             <p>
              All pending commands will be processed along with all simulation modules.
@@ -17312,6 +17360,38 @@ If False then its expected the strategy will be managing any contingent orders.
            <dd>
             <p>
              If orders with GTD time in force will be supported by the venue.
+            </p>
+            <dl class="field-list simple">
+             <dt class="field-odd">
+              Returns
+              <span class="colon">
+               :
+              </span>
+             </dt>
+             <dd class="field-odd">
+              <p>
+               <cite>
+                bool
+               </cite>
+              </p>
+             </dd>
+            </dl>
+           </dd>
+          </dl>
+          <dl class="py attribute">
+           <dt class="sig sig-object py" id="nautilus_trader.backtest.exchange.SimulatedExchange.use_message_queue">
+            <span class="sig-name descname">
+             <span class="pre">
+              use_message_queue
+             </span>
+            </span>
+            <a class="headerlink" href="#nautilus_trader.backtest.exchange.SimulatedExchange.use_message_queue" title="Permalink to this definition">
+             ¶
+            </a>
+           </dt>
+           <dd>
+            <p>
+             If an internal message queue is being used to sequentially process incoming trading commands.
             </p>
             <dl class="field-list simple">
              <dt class="field-odd">

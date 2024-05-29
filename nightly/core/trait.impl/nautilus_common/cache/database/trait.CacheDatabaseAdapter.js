@@ -1,0 +1,3 @@
+(function() {var implementors = {
+"nautilus_infrastructure":[["impl CacheDatabaseAdapter for <a class=\"struct\" href=\"nautilus_infrastructure/redis/cache/struct.RedisCacheDatabaseAdapter.html\" title=\"struct nautilus_infrastructure::redis::cache::RedisCacheDatabaseAdapter\">RedisCacheDatabaseAdapter</a>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()
