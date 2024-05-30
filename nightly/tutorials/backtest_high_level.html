@@ -962,7 +962,7 @@ Firstly, we need to load this raw data into a
          <div class="highlight-python notranslate">
           <div class="highlight">
            <pre><span></span><span class="c1"># Here we just take the first data file found and load into a pandas DataFrame</span>
-<span class="n">df</span> <span class="o">=</span> <span class="n">CSVTickDataLoader</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">raw_files</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">index_col</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="s2">"%Y%m</span><span class="si">%d</span><span class="s2"> %H%M%S</span><span class="si">%f</span><span class="s2">"</span><span class="p">)</span>
+<span class="n">df</span> <span class="o">=</span> <span class="n">CSVTickDataLoader</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">raw_files</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">index_col</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">datetime_format</span><span class="o">=</span><span class="s2">"%Y%m</span><span class="si">%d</span><span class="s2"> %H%M%S</span><span class="si">%f</span><span class="s2">"</span><span class="p">)</span>
 <span class="n">df</span><span class="o">.</span><span class="n">columns</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"bid_price"</span><span class="p">,</span> <span class="s2">"ask_price"</span><span class="p">]</span>
 
 <span class="c1"># Process quote ticks using a wrangler</span>
@@ -1121,7 +1121,7 @@ It contains various methods to pull data from the catalog, such as
     <span class="n">BacktestDataConfig</span><span class="p">(</span>
         <span class="n">catalog_path</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">ParquetDataCatalog</span><span class="o">.</span><span class="n">from_env</span><span class="p">()</span><span class="o">.</span><span class="n">path</span><span class="p">),</span>
         <span class="n">data_cls</span><span class="o">=</span><span class="n">QuoteTick</span><span class="p">,</span>
-        <span class="n">instrument_id</span><span class="o">=</span><span class="n">instrument</span><span class="o">.</span><span class="n">id</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
+        <span class="n">instrument_id</span><span class="o">=</span><span class="n">instrument</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
         <span class="n">start_time</span><span class="o">=</span><span class="n">start</span><span class="p">,</span>
         <span class="n">end_time</span><span class="o">=</span><span class="n">end</span><span class="p">,</span>
     <span class="p">),</span>
@@ -1132,7 +1132,7 @@ It contains various methods to pull data from the catalog, such as
         <span class="n">strategy_path</span><span class="o">=</span><span class="s2">"nautilus_trader.examples.strategies.ema_cross:EMACross"</span><span class="p">,</span>
         <span class="n">config_path</span><span class="o">=</span><span class="s2">"nautilus_trader.examples.strategies.ema_cross:EMACrossConfig"</span><span class="p">,</span>
         <span class="n">config</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span>
-            <span class="n">instrument_id</span><span class="o">=</span><span class="n">instrument</span><span class="o">.</span><span class="n">id</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
+            <span class="n">instrument_id</span><span class="o">=</span><span class="n">instrument</span><span class="o">.</span><span class="n">id</span><span class="p">,</span>
             <span class="n">bar_type</span><span class="o">=</span><span class="s2">"EUR/USD.SIM-15-MINUTE-BID-INTERNAL"</span><span class="p">,</span>
             <span class="n">fast_ema_period</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
             <span class="n">slow_ema_period</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span>
