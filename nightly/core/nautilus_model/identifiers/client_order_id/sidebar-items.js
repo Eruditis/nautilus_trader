@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["optional_ustr_to_vec_client_order_ids","optional_vec_client_order_ids_to_ustr"],"struct":["ClientOrderId"]};

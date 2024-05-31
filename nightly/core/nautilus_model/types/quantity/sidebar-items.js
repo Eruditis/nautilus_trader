@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":["QUANTITY_MAX","QUANTITY_MIN"],"fn":["check_quantity_positive"],"struct":["Quantity"]};

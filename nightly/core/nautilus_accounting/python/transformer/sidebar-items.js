@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["cash_account_from_account_events","margin_account_from_account_events"]};

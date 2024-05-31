@@ -1,1 +1,0 @@
-searchState.loadedDescShard("nautilus", 0, "")

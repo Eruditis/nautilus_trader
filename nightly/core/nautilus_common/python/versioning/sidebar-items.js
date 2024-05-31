@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["get_python_package_version","get_python_version"]};

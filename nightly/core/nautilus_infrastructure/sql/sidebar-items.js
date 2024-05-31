@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"constant":["NAUTILUS_TABLES"],"mod":["cache_database","models","pg","queries"]};

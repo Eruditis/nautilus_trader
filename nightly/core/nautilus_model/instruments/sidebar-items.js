@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"mod":["any","crypto_future","crypto_perpetual","currency_pair","equity","futures_contract","futures_spread","options_contract","options_spread","stubs","synthetic"],"trait":["Instrument"]};

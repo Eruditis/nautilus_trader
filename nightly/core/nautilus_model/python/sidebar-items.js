@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["model"],"mod":["common","data","enums","events","identifiers","instruments","macros","orderbook","orders","position","types"]};

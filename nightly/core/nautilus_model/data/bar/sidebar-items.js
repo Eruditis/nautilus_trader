@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["BarSpecificationBuilderError"],"struct":["Bar","BarSpecification","BarSpecificationBuilder","BarType","BarTypeParseError"]};

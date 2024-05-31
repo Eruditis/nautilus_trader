@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["py_convert_to_snake_case"]};

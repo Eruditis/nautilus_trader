@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["order_event_to_pyobject","pyobject_to_order_event"],"mod":["accepted","cancel_rejected","canceled","denied","emulated","expired","filled","initialized","modify_rejected","pending_cancel","pending_update","rejected","released","submitted","triggered","updated"]};

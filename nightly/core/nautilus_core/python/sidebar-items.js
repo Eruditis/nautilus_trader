@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["core","get_pytype_name","to_pyruntime_err","to_pytype_err","to_pyvalue_err"],"mod":["casing","datetime","serialization","uuid"]};

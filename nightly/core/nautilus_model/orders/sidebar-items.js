@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"mod":["any","base","default","limit","limit_if_touched","list","market","market_if_touched","market_to_limit","stop_limit","stop_market","stubs","trailing_stop_limit","trailing_stop_market"]};

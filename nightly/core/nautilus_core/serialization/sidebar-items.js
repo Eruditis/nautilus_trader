@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["from_bool_as_u8"],"trait":["Serializable"]};

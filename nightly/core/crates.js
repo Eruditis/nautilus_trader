@@ -1,1 +1,0 @@
-window.ALL_CRATES = ["nautilus","nautilus_accounting","nautilus_adapters","nautilus_backtest","nautilus_cli","nautilus_common","nautilus_core","nautilus_execution","nautilus_indicators","nautilus_infrastructure","nautilus_model","nautilus_network","nautilus_persistence","nautilus_pyo3","sandbox"];

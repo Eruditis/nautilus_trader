@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["DatabaseOperation"],"struct":["DatabaseCommand","RedisCacheDatabase","RedisCacheDatabaseAdapter"]};

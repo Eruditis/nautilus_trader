@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["bytes_to_usize","precision_from_str"]};

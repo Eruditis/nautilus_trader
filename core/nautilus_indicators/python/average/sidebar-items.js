@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["ama","dema","ema","hma","rma","sma","wma"]};
+window.SIDEBAR_ITEMS = {"mod":["ama","dema","ema","hma","rma","sma","vidya","vwap","wma"]};

@@ -1,3 +1,0 @@
-(function() {var implementors = {
-"nautilus_model":[["impl ToPyObject for <a class=\"struct\" href=\"nautilus_model/identifiers/instrument_id/struct.InstrumentId.html\" title=\"struct nautilus_model::identifiers::instrument_id::InstrumentId\">InstrumentId</a>"],["impl ToPyObject for <a class=\"struct\" href=\"nautilus_model/identifiers/trade_id/struct.TradeId.html\" title=\"struct nautilus_model::identifiers::trade_id::TradeId\">TradeId</a>"],["impl ToPyObject for <a class=\"struct\" href=\"nautilus_model/types/money/struct.Money.html\" title=\"struct nautilus_model::types::money::Money\">Money</a>"]]
-};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

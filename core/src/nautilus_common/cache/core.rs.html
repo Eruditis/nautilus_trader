@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `common/src/cache/core.rs`."><title>core.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="nautilus_common" data-themes="" data-resource-suffix="" data-rustdoc-version="1.80.0-nightly (867900499 2024-05-23)" data-channel="nightly" data-search-js="search-d52510db62a78183.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `common/src/cache/core.rs`."><title>core.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-46f98efaafac5295.ttf.woff2,FiraSans-Regular-018c141bf0843ffd.woff2,FiraSans-Medium-8f9a781e4970d388.woff2,SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2,SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-dd39b87e5fcfba68.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="nautilus_common" data-themes="" data-resource-suffix="" data-rustdoc-version="1.80.0-nightly (6f3df08aa 2024-05-30)" data-channel="nightly" data-search-js="search-d52510db62a78183.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-118b08c4c78b968e.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-20a3ad099b048cf2.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-df360f571f6edeae.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer"></div><main><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -2841,6 +2841,99 @@
 <a href="#2841" id="2841">2841</a>
 <a href="#2842" id="2842">2842</a>
 <a href="#2843" id="2843">2843</a>
+<a href="#2844" id="2844">2844</a>
+<a href="#2845" id="2845">2845</a>
+<a href="#2846" id="2846">2846</a>
+<a href="#2847" id="2847">2847</a>
+<a href="#2848" id="2848">2848</a>
+<a href="#2849" id="2849">2849</a>
+<a href="#2850" id="2850">2850</a>
+<a href="#2851" id="2851">2851</a>
+<a href="#2852" id="2852">2852</a>
+<a href="#2853" id="2853">2853</a>
+<a href="#2854" id="2854">2854</a>
+<a href="#2855" id="2855">2855</a>
+<a href="#2856" id="2856">2856</a>
+<a href="#2857" id="2857">2857</a>
+<a href="#2858" id="2858">2858</a>
+<a href="#2859" id="2859">2859</a>
+<a href="#2860" id="2860">2860</a>
+<a href="#2861" id="2861">2861</a>
+<a href="#2862" id="2862">2862</a>
+<a href="#2863" id="2863">2863</a>
+<a href="#2864" id="2864">2864</a>
+<a href="#2865" id="2865">2865</a>
+<a href="#2866" id="2866">2866</a>
+<a href="#2867" id="2867">2867</a>
+<a href="#2868" id="2868">2868</a>
+<a href="#2869" id="2869">2869</a>
+<a href="#2870" id="2870">2870</a>
+<a href="#2871" id="2871">2871</a>
+<a href="#2872" id="2872">2872</a>
+<a href="#2873" id="2873">2873</a>
+<a href="#2874" id="2874">2874</a>
+<a href="#2875" id="2875">2875</a>
+<a href="#2876" id="2876">2876</a>
+<a href="#2877" id="2877">2877</a>
+<a href="#2878" id="2878">2878</a>
+<a href="#2879" id="2879">2879</a>
+<a href="#2880" id="2880">2880</a>
+<a href="#2881" id="2881">2881</a>
+<a href="#2882" id="2882">2882</a>
+<a href="#2883" id="2883">2883</a>
+<a href="#2884" id="2884">2884</a>
+<a href="#2885" id="2885">2885</a>
+<a href="#2886" id="2886">2886</a>
+<a href="#2887" id="2887">2887</a>
+<a href="#2888" id="2888">2888</a>
+<a href="#2889" id="2889">2889</a>
+<a href="#2890" id="2890">2890</a>
+<a href="#2891" id="2891">2891</a>
+<a href="#2892" id="2892">2892</a>
+<a href="#2893" id="2893">2893</a>
+<a href="#2894" id="2894">2894</a>
+<a href="#2895" id="2895">2895</a>
+<a href="#2896" id="2896">2896</a>
+<a href="#2897" id="2897">2897</a>
+<a href="#2898" id="2898">2898</a>
+<a href="#2899" id="2899">2899</a>
+<a href="#2900" id="2900">2900</a>
+<a href="#2901" id="2901">2901</a>
+<a href="#2902" id="2902">2902</a>
+<a href="#2903" id="2903">2903</a>
+<a href="#2904" id="2904">2904</a>
+<a href="#2905" id="2905">2905</a>
+<a href="#2906" id="2906">2906</a>
+<a href="#2907" id="2907">2907</a>
+<a href="#2908" id="2908">2908</a>
+<a href="#2909" id="2909">2909</a>
+<a href="#2910" id="2910">2910</a>
+<a href="#2911" id="2911">2911</a>
+<a href="#2912" id="2912">2912</a>
+<a href="#2913" id="2913">2913</a>
+<a href="#2914" id="2914">2914</a>
+<a href="#2915" id="2915">2915</a>
+<a href="#2916" id="2916">2916</a>
+<a href="#2917" id="2917">2917</a>
+<a href="#2918" id="2918">2918</a>
+<a href="#2919" id="2919">2919</a>
+<a href="#2920" id="2920">2920</a>
+<a href="#2921" id="2921">2921</a>
+<a href="#2922" id="2922">2922</a>
+<a href="#2923" id="2923">2923</a>
+<a href="#2924" id="2924">2924</a>
+<a href="#2925" id="2925">2925</a>
+<a href="#2926" id="2926">2926</a>
+<a href="#2927" id="2927">2927</a>
+<a href="#2928" id="2928">2928</a>
+<a href="#2929" id="2929">2929</a>
+<a href="#2930" id="2930">2930</a>
+<a href="#2931" id="2931">2931</a>
+<a href="#2932" id="2932">2932</a>
+<a href="#2933" id="2933">2933</a>
+<a href="#2934" id="2934">2934</a>
+<a href="#2935" id="2935">2935</a>
+<a href="#2936" id="2936">2936</a>
 </pre></div><pre class="rust"><code><span class="comment">// -------------------------------------------------------------------------------------------------
 //  Copyright (C) 2015-2024 Nautech Systems Pty Ltd. All rights reserved.
 //  https://nautechsystems.io
@@ -2855,6 +2948,8 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 // -------------------------------------------------------------------------------------------------
+
+</span><span class="doccomment">//! The core cache in-memory structure.
 
 </span><span class="kw">use </span>std::{
     collections::{HashMap, HashSet, VecDeque},
@@ -2892,7 +2987,7 @@
 <span class="kw">use </span><span class="kw">super</span>::database::CacheDatabaseAdapter;
 <span class="kw">use crate</span>::{enums::SerializationEncoding, interface::account::Account};
 
-<span class="doccomment">/// The configuration for `Cache` instances.
+<span class="doccomment">/// Configuration for `Cache` instances.
 </span><span class="kw">pub struct </span>CacheConfig {
     <span class="kw">pub </span>encoding: SerializationEncoding,
     <span class="kw">pub </span>timestamps_as_iso8601: bool,
@@ -2905,7 +3000,8 @@
 }
 
 <span class="kw">impl </span>CacheConfig {
-    <span class="attr">#[allow(clippy::too_many_arguments)]
+    <span class="doccomment">/// Creates a new [`CacheConfig`] instance.
+    </span><span class="attr">#[allow(clippy::too_many_arguments)]
     #[must_use]
     </span><span class="kw">pub fn </span>new(
         encoding: SerializationEncoding,
@@ -2931,7 +3027,8 @@
 }
 
 <span class="kw">impl </span>Default <span class="kw">for </span>CacheConfig {
-    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
+    <span class="doccomment">/// Creates a new default [`CacheConfig`] instance.
+    </span><span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::new(
             SerializationEncoding::MsgPack,
             <span class="bool-val">false</span>,
@@ -2978,7 +3075,7 @@
 }
 
 <span class="kw">impl </span>CacheIndex {
-    <span class="doccomment">/// Clear the index which will clear/reset all internal state.
+    <span class="doccomment">/// Clears the index which will clear/reset all internal state.
     </span><span class="kw">pub fn </span>clear(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="self">self</span>.venue_account.clear();
         <span class="self">self</span>.venue_orders.clear();
@@ -3015,7 +3112,7 @@
 </span><span class="kw">pub struct </span>Cache {
     config: CacheConfig,
     index: CacheIndex,
-    database: <span class="prelude-ty">Option</span>&lt;CacheDatabaseAdapter&gt;,
+    database: <span class="prelude-ty">Option</span>&lt;Box&lt;<span class="kw">dyn </span>CacheDatabaseAdapter&gt;&gt;,
     general: HashMap&lt;String, Vec&lt;u8&gt;&gt;,
     quotes: HashMap&lt;InstrumentId, VecDeque&lt;QuoteTick&gt;&gt;,
     trades: HashMap&lt;InstrumentId, VecDeque&lt;TradeTick&gt;&gt;,
@@ -3032,14 +3129,16 @@
 }
 
 <span class="kw">impl </span>Default <span class="kw">for </span>Cache {
-    <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
+    <span class="doccomment">/// Creates a new default [`Cache`] instance.
+    </span><span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::new(CacheConfig::default(), <span class="prelude-val">None</span>)
     }
 }
 
 <span class="kw">impl </span>Cache {
-    <span class="attr">#[must_use]
-    </span><span class="kw">pub fn </span>new(config: CacheConfig, database: <span class="prelude-ty">Option</span>&lt;CacheDatabaseAdapter&gt;) -&gt; <span class="self">Self </span>{
+    <span class="doccomment">/// Creates a new [`Cache`] instance.
+    </span><span class="attr">#[must_use]
+    </span><span class="kw">pub fn </span>new(config: CacheConfig, database: <span class="prelude-ty">Option</span>&lt;Box&lt;<span class="kw">dyn </span>CacheDatabaseAdapter&gt;&gt;) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span>index = CacheIndex {
             venue_account: HashMap::new(),
             venue_orders: HashMap::new(),
@@ -3093,9 +3192,9 @@
 
     <span class="comment">// -- COMMANDS --------------------------------------------------------------------------------
 
-    </span><span class="doccomment">/// Clear the current general cache and load the general objects from the cache database.
+    </span><span class="doccomment">/// Clears the current general cache and loads the general objects from the cache database.
     </span><span class="kw">pub fn </span>cache_general(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="self">self</span>.general = <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.database {
+        <span class="self">self</span>.general = <span class="kw">match </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.database {
             <span class="prelude-val">Some</span>(db) =&gt; db.load()<span class="question-mark">?</span>,
             <span class="prelude-val">None </span>=&gt; HashMap::new(),
         };
@@ -3107,9 +3206,9 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="doccomment">/// Clear the current currencies cache and load currencies from the cache database.
+    <span class="doccomment">/// Clears the current currencies cache and loads currencies from the cache database.
     </span><span class="kw">pub fn </span>cache_currencies(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="self">self</span>.currencies = <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.database {
+        <span class="self">self</span>.currencies = <span class="kw">match </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.database {
             <span class="prelude-val">Some</span>(db) =&gt; db.load_currencies()<span class="question-mark">?</span>,
             <span class="prelude-val">None </span>=&gt; HashMap::new(),
         };
@@ -3118,9 +3217,9 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="doccomment">/// Clear the current instruments cache and load instruments from the cache database.
+    <span class="doccomment">/// Clears the current instruments cache and loads instruments from the cache database.
     </span><span class="kw">pub fn </span>cache_instruments(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="self">self</span>.instruments = <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.database {
+        <span class="self">self</span>.instruments = <span class="kw">match </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.database {
             <span class="prelude-val">Some</span>(db) =&gt; db.load_instruments()<span class="question-mark">?</span>,
             <span class="prelude-val">None </span>=&gt; HashMap::new(),
         };
@@ -3129,10 +3228,10 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="doccomment">/// Clear the current synthetic instruments cache and load synthetic instruments from the cache
+    <span class="doccomment">/// Clears the current synthetic instruments cache and loads synthetic instruments from the cache
     /// database.
     </span><span class="kw">pub fn </span>cache_synthetics(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="self">self</span>.synthetics = <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.database {
+        <span class="self">self</span>.synthetics = <span class="kw">match </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.database {
             <span class="prelude-val">Some</span>(db) =&gt; db.load_synthetics()<span class="question-mark">?</span>,
             <span class="prelude-val">None </span>=&gt; HashMap::new(),
         };
@@ -3144,9 +3243,9 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="doccomment">/// Clear the current accounts cache and load accounts from the cache database.
+    <span class="doccomment">/// Clears the current accounts cache and loads accounts from the cache database.
     </span><span class="kw">pub fn </span>cache_accounts(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="self">self</span>.accounts = <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.database {
+        <span class="self">self</span>.accounts = <span class="kw">match </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.database {
             <span class="prelude-val">Some</span>(db) =&gt; db.load_accounts()<span class="question-mark">?</span>,
             <span class="prelude-val">None </span>=&gt; HashMap::new(),
         };
@@ -3158,9 +3257,9 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="doccomment">/// Clear the current orders cache and load orders from the cache database.
+    <span class="doccomment">/// Clears the current orders cache and loads orders from the cache database.
     </span><span class="kw">pub fn </span>cache_orders(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="self">self</span>.orders = <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.database {
+        <span class="self">self</span>.orders = <span class="kw">match </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.database {
             <span class="prelude-val">Some</span>(db) =&gt; db.load_orders()<span class="question-mark">?</span>,
             <span class="prelude-val">None </span>=&gt; HashMap::new(),
         };
@@ -3169,9 +3268,9 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="doccomment">/// Clear the current positions cache and load positions from the cache database.
+    <span class="doccomment">/// Clears the current positions cache and loads positions from the cache database.
     </span><span class="kw">pub fn </span>cache_positions(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="self">self</span>.positions = <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.database {
+        <span class="self">self</span>.positions = <span class="kw">match </span><span class="kw-2">&amp;mut </span><span class="self">self</span>.database {
             <span class="prelude-val">Some</span>(db) =&gt; db.load_positions()<span class="question-mark">?</span>,
             <span class="prelude-val">None </span>=&gt; HashMap::new(),
         };
@@ -3180,7 +3279,7 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="doccomment">/// Clear the current cache index and re-build.
+    <span class="doccomment">/// Clears the current cache index and re-build.
     </span><span class="kw">pub fn </span>build_index(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="self">self</span>.index.clear();
         <span class="macro">debug!</span>(<span class="string">"Building index"</span>);
@@ -3347,7 +3446,7 @@
         }
     }
 
-    <span class="doccomment">/// Check integrity of data within the cache.
+    <span class="doccomment">/// Checks integrity of data within the cache.
     ///
     /// All data should be loaded from the database prior to this call.
     /// If an error is found then a log error message will also be produced.
@@ -3720,7 +3819,7 @@
         </span>}
     }
 
-    <span class="doccomment">/// Check for any residual open state and log warnings if any are found.
+    <span class="doccomment">/// Checks for any residual open state and log warnings if any are found.
     ///
     ///'Open state' is considered to be open orders and open positions.
     </span><span class="attr">#[must_use]
@@ -3744,13 +3843,13 @@
         residuals
     }
 
-    <span class="doccomment">/// Clear the caches index.
+    <span class="doccomment">/// Clears the caches index.
     </span><span class="kw">pub fn </span>clear_index(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
         <span class="self">self</span>.index.clear();
         <span class="macro">debug!</span>(<span class="string">"Cleared index"</span>);
     }
 
-    <span class="doccomment">/// Reset the cache.
+    <span class="doccomment">/// Resets the cache.
     ///
     /// All stateful fields are reset to their initial value.
     </span><span class="kw">pub fn </span>reset(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
@@ -3775,27 +3874,27 @@
     }
 
     <span class="doccomment">/// Dispose of the cache which will close any underlying database adapter.
-    </span><span class="kw">pub fn </span>dispose(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(database) = <span class="kw-2">&amp;</span><span class="self">self</span>.database {
+    </span><span class="kw">pub fn </span>dispose(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(database) = <span class="kw-2">&amp;mut </span><span class="self">self</span>.database {
             <span class="comment">// TODO: Log operations in database adapter
             </span>database.close()<span class="question-mark">?</span>;
         }
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="doccomment">/// Flush the caches database which permanently removes all persisted data.
-    </span><span class="kw">pub fn </span>flush_db(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(database) = <span class="kw-2">&amp;</span><span class="self">self</span>.database {
+    <span class="doccomment">/// Flushes the caches database which permanently removes all persisted data.
+    </span><span class="kw">pub fn </span>flush_db(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; anyhow::Result&lt;()&gt; {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(database) = <span class="kw-2">&amp;mut </span><span class="self">self</span>.database {
             <span class="comment">// TODO: Log operations in database adapter
             </span>database.flush()<span class="question-mark">?</span>;
         }
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="doccomment">/// Add the given general object to the cache.
+    <span class="doccomment">/// Adds a general object `value` (as bytes) to the cache at the given `key`.
     ///
-    /// The cache is agnostic to what the object actually is (and how it may be serialized),
-    /// offering maximum flexibility.
+    /// The cache is agnostic to what the bytes actually represent (and how it may be serialized),
+    /// which provides maximum flexibility.
     </span><span class="kw">pub fn </span>add(<span class="kw-2">&amp;mut </span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>str, value: Vec&lt;u8&gt;) -&gt; anyhow::Result&lt;()&gt; {
         check_valid_string(key, <span class="macro">stringify!</span>(key))<span class="question-mark">?</span>;
         check_slice_not_empty(value.as_slice(), <span class="macro">stringify!</span>(value))<span class="question-mark">?</span>;
@@ -3803,20 +3902,20 @@
         <span class="macro">debug!</span>(<span class="string">"Adding general {key}"</span>);
         <span class="self">self</span>.general.insert(key.to_string(), value.clone());
 
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(database) = <span class="kw-2">&amp;</span><span class="self">self</span>.database {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(database) = <span class="kw-2">&amp;mut </span><span class="self">self</span>.database {
             database.add(key.to_string(), value)<span class="question-mark">?</span>;
         }
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="doccomment">/// Add the given order `book` to the cache.
+    <span class="doccomment">/// Adds the given order `book` to the cache.
     </span><span class="kw">pub fn </span>add_order_book(<span class="kw-2">&amp;mut </span><span class="self">self</span>, book: OrderBook) -&gt; anyhow::Result&lt;()&gt; {
         <span class="macro">debug!</span>(<span class="string">"Adding `OrderBook` {}"</span>, book.instrument_id);
         <span class="self">self</span>.books.insert(book.instrument_id, book);
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="doccomment">/// Add the given `quote` tick to the cache.
+    <span class="doccomment">/// Adds the given `quote` tick to the cache.
     </span><span class="kw">pub fn </span>add_quote(<span class="kw-2">&amp;mut </span><span class="self">self</span>, quote: QuoteTick) -&gt; anyhow::Result&lt;()&gt; {
         <span class="macro">debug!</span>(<span class="string">"Adding `QuoteTick` {}"</span>, quote.instrument_id);
         <span class="kw">let </span>quotes_deque = <span class="self">self
@@ -3827,7 +3926,7 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="doccomment">/// Add the given `quotes` to the cache.
+    <span class="doccomment">/// Adds the given `quotes` to the cache.
     </span><span class="kw">pub fn </span>add_quotes(<span class="kw-2">&amp;mut </span><span class="self">self</span>, quotes: <span class="kw-2">&amp;</span>[QuoteTick]) -&gt; anyhow::Result&lt;()&gt; {
         check_slice_not_empty(quotes, <span class="macro">stringify!</span>(quotes))<span class="question-mark">?</span>;
 
@@ -3844,7 +3943,7 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="doccomment">/// Add the given `trade` tick to the cache.
+    <span class="doccomment">/// Adds the given `trade` tick to the cache.
     </span><span class="kw">pub fn </span>add_trade(<span class="kw-2">&amp;mut </span><span class="self">self</span>, trade: TradeTick) -&gt; anyhow::Result&lt;()&gt; {
         <span class="macro">debug!</span>(<span class="string">"Adding `TradeTick` {}"</span>, trade.instrument_id);
         <span class="kw">let </span>trades_deque = <span class="self">self
@@ -3855,7 +3954,7 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="doccomment">/// Add the give `trades` to the cache.
+    <span class="doccomment">/// Adds the give `trades` to the cache.
     </span><span class="kw">pub fn </span>add_trades(<span class="kw-2">&amp;mut </span><span class="self">self</span>, trades: <span class="kw-2">&amp;</span>[TradeTick]) -&gt; anyhow::Result&lt;()&gt; {
         check_slice_not_empty(trades, <span class="macro">stringify!</span>(trades))<span class="question-mark">?</span>;
 
@@ -3872,7 +3971,7 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="doccomment">/// Add the given `bar` to the cache.
+    <span class="doccomment">/// Adds the given `bar` to the cache.
     </span><span class="kw">pub fn </span>add_bar(<span class="kw-2">&amp;mut </span><span class="self">self</span>, bar: Bar) -&gt; anyhow::Result&lt;()&gt; {
         <span class="macro">debug!</span>(<span class="string">"Adding `Bar` {}"</span>, bar.bar_type);
         <span class="kw">let </span>bars = <span class="self">self
@@ -3883,7 +3982,7 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="doccomment">/// Add the given `bars` to the cache.
+    <span class="doccomment">/// Adds the given `bars` to the cache.
     </span><span class="kw">pub fn </span>add_bars(<span class="kw-2">&amp;mut </span><span class="self">self</span>, bars: <span class="kw-2">&amp;</span>[Bar]) -&gt; anyhow::Result&lt;()&gt; {
         check_slice_not_empty(bars, <span class="macro">stringify!</span>(bars))<span class="question-mark">?</span>;
 
@@ -3900,11 +3999,11 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="doccomment">/// Add the given `currency` to the cache.
+    <span class="doccomment">/// Adds the given `currency` to the cache.
     </span><span class="kw">pub fn </span>add_currency(<span class="kw-2">&amp;mut </span><span class="self">self</span>, currency: Currency) -&gt; anyhow::Result&lt;()&gt; {
         <span class="macro">debug!</span>(<span class="string">"Adding `Currency` {}"</span>, currency.code);
 
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(database) = <span class="kw-2">&amp;</span><span class="self">self</span>.database {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(database) = <span class="kw-2">&amp;mut </span><span class="self">self</span>.database {
             database.add_currency(<span class="kw-2">&amp;</span>currency)<span class="question-mark">?</span>;
         }
 
@@ -3912,11 +4011,11 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="doccomment">/// Add the given `instrument` to the cache.
+    <span class="doccomment">/// Adds the given `instrument` to the cache.
     </span><span class="kw">pub fn </span>add_instrument(<span class="kw-2">&amp;mut </span><span class="self">self</span>, instrument: InstrumentAny) -&gt; anyhow::Result&lt;()&gt; {
         <span class="macro">debug!</span>(<span class="string">"Adding `Instrument` {}"</span>, instrument.id());
 
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(database) = <span class="kw-2">&amp;</span><span class="self">self</span>.database {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(database) = <span class="kw-2">&amp;mut </span><span class="self">self</span>.database {
             database.add_instrument(<span class="kw-2">&amp;</span>instrument)<span class="question-mark">?</span>;
         }
 
@@ -3924,11 +4023,11 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="doccomment">/// Add the given `synthetic` instrument to the cache.
+    <span class="doccomment">/// Adds the given `synthetic` instrument to the cache.
     </span><span class="kw">pub fn </span>add_synthetic(<span class="kw-2">&amp;mut </span><span class="self">self</span>, synthetic: SyntheticInstrument) -&gt; anyhow::Result&lt;()&gt; {
         <span class="macro">debug!</span>(<span class="string">"Adding `SyntheticInstrument` {}"</span>, synthetic.id);
 
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(database) = <span class="kw-2">&amp;</span><span class="self">self</span>.database {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(database) = <span class="kw-2">&amp;mut </span><span class="self">self</span>.database {
             database.add_synthetic(<span class="kw-2">&amp;</span>synthetic)<span class="question-mark">?</span>;
         }
 
@@ -3936,11 +4035,11 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="doccomment">/// Add the given `account` to the cache.
+    <span class="doccomment">/// Adds the given `account` to the cache.
     </span><span class="kw">pub fn </span>add_account(<span class="kw-2">&amp;mut </span><span class="self">self</span>, account: Box&lt;<span class="kw">dyn </span>Account&gt;) -&gt; anyhow::Result&lt;()&gt; {
         <span class="macro">debug!</span>(<span class="string">"Adding `Account` {}"</span>, account.id());
 
-        <span class="kw">if let </span><span class="prelude-val">Some</span>(database) = <span class="kw-2">&amp;</span><span class="self">self</span>.database {
+        <span class="kw">if let </span><span class="prelude-val">Some</span>(database) = <span class="kw-2">&amp;mut </span><span class="self">self</span>.database {
             database.add_account(account.as_ref())<span class="question-mark">?</span>;
         }
 
@@ -3948,7 +4047,9 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="doccomment">/// Index the given client order ID with the given venue order ID.
+    <span class="doccomment">/// Indexes the given `client_order_id` with the given `venue_order_id`.
+    ///
+    /// The `overwrite` parameter determines whether to overwrite any existing cached identifier.
     </span><span class="kw">pub fn </span>add_venue_order_id(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         client_order_id: <span class="kw-2">&amp;</span>ClientOrderId,
@@ -3976,7 +4077,7 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="doccomment">/// Add the order to the cache indexed with any given identifiers.
+    <span class="doccomment">/// Adds the given `order` to the cache indexed with any given identifiers.
     ///
     /// # Parameters
     ///
@@ -4114,7 +4215,7 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="doccomment">/// Index the given `position_id` with the other given IDs.
+    <span class="doccomment">/// Indexes the given `position_id` with the other given IDs.
     </span><span class="kw">pub fn </span>add_position_id(
         <span class="kw-2">&amp;mut </span><span class="self">self</span>,
         position_id: <span class="kw-2">&amp;</span>PositionId,
@@ -4153,7 +4254,8 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="kw">pub fn </span>add_position(<span class="kw-2">&amp;mut </span><span class="self">self</span>, position: Position, oms_type: OmsType) -&gt; anyhow::Result&lt;()&gt; {
+    <span class="doccomment">/// Adds the given `position` to the cache.
+    </span><span class="kw">pub fn </span>add_position(<span class="kw-2">&amp;mut </span><span class="self">self</span>, position: Position, oms_type: OmsType) -&gt; anyhow::Result&lt;()&gt; {
         <span class="self">self</span>.positions.insert(position.id, position.clone());
         <span class="self">self</span>.index.positions.insert(position.id);
         <span class="self">self</span>.index.positions_open.insert(position.id);
@@ -4195,7 +4297,7 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="doccomment">/// Update the given `account` in the cache.
+    <span class="doccomment">/// Updates the given `account` in the cache.
     </span><span class="kw">pub fn </span>update_account(<span class="kw-2">&amp;mut </span><span class="self">self</span>, account: <span class="kw-2">&amp;</span><span class="kw">dyn </span>Account) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">if let </span><span class="prelude-val">Some</span>(database) = <span class="kw-2">&amp;mut </span><span class="self">self</span>.database {
             database.update_account(account)<span class="question-mark">?</span>;
@@ -4203,7 +4305,7 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="doccomment">/// Update the given `order` in the cache.
+    <span class="doccomment">/// Updates the given `order` in the cache.
     </span><span class="kw">pub fn </span>update_order(<span class="kw-2">&amp;mut </span><span class="self">self</span>, order: <span class="kw-2">&amp;</span>OrderAny) -&gt; anyhow::Result&lt;()&gt; {
         <span class="kw">let </span>client_order_id = order.client_order_id();
 
@@ -4253,14 +4355,14 @@
         <span class="prelude-val">Ok</span>(())
     }
 
-    <span class="doccomment">/// Update the given `order` as pending cancel locally.
+    <span class="doccomment">/// Updates the given `order` as pending cancel locally.
     </span><span class="kw">pub fn </span>update_order_pending_cancel_local(<span class="kw-2">&amp;mut </span><span class="self">self</span>, order: <span class="kw-2">&amp;</span>OrderAny) {
         <span class="self">self</span>.index
             .orders_pending_cancel
             .insert(order.client_order_id());
     }
 
-    <span class="doccomment">/// Update the given `position` in the cache.
+    <span class="doccomment">/// Updates the given `position` in the cache.
     </span><span class="kw">pub fn </span>update_position(<span class="kw-2">&amp;mut </span><span class="self">self</span>, position: <span class="kw-2">&amp;</span>Position) -&gt; anyhow::Result&lt;()&gt; {
         <span class="comment">// Update open/closed state
         </span><span class="kw">if </span>position.is_open() {
@@ -4437,7 +4539,8 @@
         positions
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns the `ClientOrderId`s of all orders.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>client_order_ids(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         venue: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Venue&gt;,
@@ -4451,7 +4554,8 @@
         }
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns the `ClientOrderId`s of all open orders.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>client_order_ids_open(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         venue: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Venue&gt;,
@@ -4470,7 +4574,8 @@
         }
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns the `ClientOrderId`s of all closed orders.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>client_order_ids_closed(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         venue: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Venue&gt;,
@@ -4489,7 +4594,8 @@
         }
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns the `ClientOrderId`s of all emulated orders.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>client_order_ids_emulated(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         venue: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Venue&gt;,
@@ -4508,7 +4614,8 @@
         }
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns the `ClientOrderId`s of all in-flight orders.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>client_order_ids_inflight(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         venue: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Venue&gt;,
@@ -4527,7 +4634,8 @@
         }
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns `PositionId`s of all positions.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>position_ids(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         venue: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Venue&gt;,
@@ -4541,7 +4649,8 @@
         }
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns the `PositionId`s of all open positions.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>position_open_ids(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         venue: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Venue&gt;,
@@ -4560,7 +4669,8 @@
         }
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns the `PositionId`s of all closed positions.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>position_closed_ids(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         venue: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Venue&gt;,
@@ -4579,44 +4689,52 @@
         }
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns the `ComponentId`s of all actors.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>actor_ids(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; HashSet&lt;ComponentId&gt; {
         <span class="self">self</span>.index.actors.clone()
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns the `StrategyId`s of all strategies.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>strategy_ids(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; HashSet&lt;StrategyId&gt; {
         <span class="self">self</span>.index.strategies.clone()
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns the `ExecAlgorithmId`s of all execution algorithms.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>exec_algorithm_ids(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; HashSet&lt;ExecAlgorithmId&gt; {
         <span class="self">self</span>.index.exec_algorithms.clone()
     }
 
     <span class="comment">// -- ORDER QUERIES ---------------------------------------------------------------------------
 
+    </span><span class="doccomment">/// Gets a reference to the order with the given `client_order_id` (if found).
     </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>order(<span class="kw-2">&amp;</span><span class="self">self</span>, client_order_id: <span class="kw-2">&amp;</span>ClientOrderId) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>OrderAny&gt; {
         <span class="self">self</span>.orders.get(client_order_id)
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Gets a reference to the client order ID for given `venue_order_id` (if found).
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>client_order_id(<span class="kw-2">&amp;</span><span class="self">self</span>, venue_order_id: <span class="kw-2">&amp;</span>VenueOrderId) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>ClientOrderId&gt; {
         <span class="self">self</span>.index.venue_order_ids.get(venue_order_id)
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Gets a reference to the venue order ID for given `client_order_id` (if found).
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>venue_order_id(<span class="kw-2">&amp;</span><span class="self">self</span>, client_order_id: <span class="kw-2">&amp;</span>ClientOrderId) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>VenueOrderId&gt; {
         <span class="self">self</span>.index.client_order_ids.get(client_order_id)
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Gets a reference to the client ID indexed for given `client_order_id` (if found).
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>client_id(<span class="kw-2">&amp;</span><span class="self">self</span>, client_order_id: <span class="kw-2">&amp;</span>ClientOrderId) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>ClientId&gt; {
         <span class="self">self</span>.index.order_client.get(client_order_id)
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns references to all orders matching the given optional filter parameters.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>orders(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         venue: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Venue&gt;,
@@ -4628,7 +4746,8 @@
         <span class="self">self</span>.get_orders_for_ids(<span class="kw-2">&amp;</span>client_order_ids, side)
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns references to all open orders matching the given optional filter parameters.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>orders_open(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         venue: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Venue&gt;,
@@ -4640,7 +4759,8 @@
         <span class="self">self</span>.get_orders_for_ids(<span class="kw-2">&amp;</span>client_order_ids, side)
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns references to all closed orders matching the given optional filter parameters.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>orders_closed(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         venue: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Venue&gt;,
@@ -4652,7 +4772,8 @@
         <span class="self">self</span>.get_orders_for_ids(<span class="kw-2">&amp;</span>client_order_ids, side)
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns references to all emulated orders matching the given optional filter parameters.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>orders_emulated(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         venue: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Venue&gt;,
@@ -4664,7 +4785,8 @@
         <span class="self">self</span>.get_orders_for_ids(<span class="kw-2">&amp;</span>client_order_ids, side)
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns references to all in-flight orders matching the given optional filter parameters.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>orders_inflight(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         venue: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Venue&gt;,
@@ -4676,7 +4798,8 @@
         <span class="self">self</span>.get_orders_for_ids(<span class="kw-2">&amp;</span>client_order_ids, side)
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns references to all orders for the given `position_id`.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>orders_for_position(<span class="kw-2">&amp;</span><span class="self">self</span>, position_id: <span class="kw-2">&amp;</span>PositionId) -&gt; Vec&lt;<span class="kw-2">&amp;</span>OrderAny&gt; {
         <span class="kw">let </span>client_order_ids = <span class="self">self</span>.index.position_orders.get(position_id);
         <span class="kw">match </span>client_order_ids {
@@ -4687,37 +4810,44 @@
         }
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns whether an order with the given `client_order_id` exists.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>order_exists(<span class="kw-2">&amp;</span><span class="self">self</span>, client_order_id: <span class="kw-2">&amp;</span>ClientOrderId) -&gt; bool {
         <span class="self">self</span>.index.orders.contains(client_order_id)
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns whether an order with the given `client_order_id` is open.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>is_order_open(<span class="kw-2">&amp;</span><span class="self">self</span>, client_order_id: <span class="kw-2">&amp;</span>ClientOrderId) -&gt; bool {
         <span class="self">self</span>.index.orders_open.contains(client_order_id)
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns whether an order with the given `client_order_id` is closed.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>is_order_closed(<span class="kw-2">&amp;</span><span class="self">self</span>, client_order_id: <span class="kw-2">&amp;</span>ClientOrderId) -&gt; bool {
         <span class="self">self</span>.index.orders_closed.contains(client_order_id)
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns whether an order with the given `client_order_id` is emulated.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>is_order_emulated(<span class="kw-2">&amp;</span><span class="self">self</span>, client_order_id: <span class="kw-2">&amp;</span>ClientOrderId) -&gt; bool {
         <span class="self">self</span>.index.orders_emulated.contains(client_order_id)
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns whether an order with the given `client_order_id` is in-flight.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>is_order_inflight(<span class="kw-2">&amp;</span><span class="self">self</span>, client_order_id: <span class="kw-2">&amp;</span>ClientOrderId) -&gt; bool {
         <span class="self">self</span>.index.orders_inflight.contains(client_order_id)
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns whether an order with the given `client_order_id` is `PENDING_CANCEL` locally.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>is_order_pending_cancel_local(<span class="kw-2">&amp;</span><span class="self">self</span>, client_order_id: <span class="kw-2">&amp;</span>ClientOrderId) -&gt; bool {
         <span class="self">self</span>.index.orders_pending_cancel.contains(client_order_id)
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns the count of all open orders.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>orders_open_count(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         venue: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Venue&gt;,
@@ -4729,7 +4859,8 @@
             .len()
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns the count of all closed orders.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>orders_closed_count(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         venue: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Venue&gt;,
@@ -4741,7 +4872,8 @@
             .len()
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns the count of all emulated orders.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>orders_emulated_count(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         venue: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Venue&gt;,
@@ -4753,7 +4885,8 @@
             .len()
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns the count of all in-flight orders.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>orders_inflight_count(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         venue: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Venue&gt;,
@@ -4765,7 +4898,8 @@
             .len()
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns the count of all orders.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>orders_total_count(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         venue: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Venue&gt;,
@@ -4776,12 +4910,14 @@
         <span class="self">self</span>.orders(venue, instrument_id, strategy_id, side).len()
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns the order list for the given `order_list_id`.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>order_list(<span class="kw-2">&amp;</span><span class="self">self</span>, order_list_id: <span class="kw-2">&amp;</span>OrderListId) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>OrderList&gt; {
         <span class="self">self</span>.order_lists.get(order_list_id)
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns all order lists matching the given optional filter parameters.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>order_lists(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         venue: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Venue&gt;,
@@ -4805,13 +4941,16 @@
         order_lists
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns whether an order list with the given `order_list_id` exists.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>order_list_exists(<span class="kw-2">&amp;</span><span class="self">self</span>, order_list_id: <span class="kw-2">&amp;</span>OrderListId) -&gt; bool {
         <span class="self">self</span>.order_lists.contains_key(order_list_id)
     }
 
     <span class="comment">// -- EXEC ALGORITHM QUERIES ------------------------------------------------------------------
 
+    </span><span class="doccomment">/// Returns references to all orders associated with the given `exec_algorithm_id` matching the given
+    /// optional filter parameters.
     </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>orders_for_exec_algorithm(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
@@ -4837,7 +4976,8 @@
         }
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns references to all orders with the given `exec_spawn_id`.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>orders_for_exec_spawn(<span class="kw-2">&amp;</span><span class="self">self</span>, exec_spawn_id: <span class="kw-2">&amp;</span>ClientOrderId) -&gt; Vec&lt;<span class="kw-2">&amp;</span>OrderAny&gt; {
         <span class="self">self</span>.get_orders_for_ids(
             <span class="self">self</span>.index
@@ -4848,7 +4988,8 @@
         )
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns the total order quantity for the given `exec_spawn_id`.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>exec_spawn_total_quantity(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         exec_spawn_id: <span class="kw-2">&amp;</span>ClientOrderId,
@@ -4871,7 +5012,8 @@
         total_quantity
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns the total filled quantity for all orders with the given `exec_spawn_id`.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>exec_spawn_total_filled_qty(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         exec_spawn_id: <span class="kw-2">&amp;</span>ClientOrderId,
@@ -4894,7 +5036,8 @@
         total_quantity
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns the total leaves quantity for all orders with the given `exec_spawn_id`.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>exec_spawn_total_leaves_qty(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         exec_spawn_id: <span class="kw-2">&amp;</span>ClientOrderId,
@@ -4919,12 +5062,14 @@
 
     <span class="comment">// -- POSITION QUERIES ------------------------------------------------------------------------
 
+    </span><span class="doccomment">/// Returns a reference to the position with the given `position_id` (if found).
     </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>position(<span class="kw-2">&amp;</span><span class="self">self</span>, position_id: <span class="kw-2">&amp;</span>PositionId) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Position&gt; {
         <span class="self">self</span>.positions.get(position_id)
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns a reference to the position for the given `client_order_id` (if found).
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>position_for_order(<span class="kw-2">&amp;</span><span class="self">self</span>, client_order_id: <span class="kw-2">&amp;</span>ClientOrderId) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Position&gt; {
         <span class="self">self</span>.index
             .order_position
@@ -4932,12 +5077,14 @@
             .and_then(|position_id| <span class="self">self</span>.positions.get(position_id))
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns a reference to the position ID for the given `client_order_id` (if found).
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>position_id(<span class="kw-2">&amp;</span><span class="self">self</span>, client_order_id: <span class="kw-2">&amp;</span>ClientOrderId) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>PositionId&gt; {
         <span class="self">self</span>.index.order_position.get(client_order_id)
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns a reference to all positions matching the given optional filter parameters.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>positions(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         venue: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Venue&gt;,
@@ -4949,7 +5096,8 @@
         <span class="self">self</span>.get_positions_for_ids(<span class="kw-2">&amp;</span>position_ids, side)
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns a reference to all open positions matching the given optional filter parameters.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>positions_open(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         venue: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Venue&gt;,
@@ -4961,7 +5109,8 @@
         <span class="self">self</span>.get_positions_for_ids(<span class="kw-2">&amp;</span>position_ids, side)
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns a reference to all closed positions matching the given optional filter parameters.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>positions_closed(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         venue: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Venue&gt;,
@@ -4973,71 +5122,80 @@
         <span class="self">self</span>.get_positions_for_ids(<span class="kw-2">&amp;</span>position_ids, side)
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns whether a position with the given `position_id` exists.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>position_exists(<span class="kw-2">&amp;</span><span class="self">self</span>, position_id: <span class="kw-2">&amp;</span>PositionId) -&gt; bool {
         <span class="self">self</span>.index.positions.contains(position_id)
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns whether a position with the given `position_id` is open.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>is_position_open(<span class="kw-2">&amp;</span><span class="self">self</span>, position_id: <span class="kw-2">&amp;</span>PositionId) -&gt; bool {
         <span class="self">self</span>.index.positions_open.contains(position_id)
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns whether a position with the given `position_id` is closed.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>is_position_closed(<span class="kw-2">&amp;</span><span class="self">self</span>, position_id: <span class="kw-2">&amp;</span>PositionId) -&gt; bool {
         <span class="self">self</span>.index.positions_closed.contains(position_id)
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns the count of all open positions.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>positions_open_count(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         venue: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Venue&gt;,
         instrument_id: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>InstrumentId&gt;,
         strategy_id: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>StrategyId&gt;,
         side: <span class="prelude-ty">Option</span>&lt;PositionSide&gt;,
-    ) -&gt; u64 {
+    ) -&gt; usize {
         <span class="self">self</span>.positions_open(venue, instrument_id, strategy_id, side)
-            .len() <span class="kw">as </span>u64
+            .len()
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns the count of all closed positions.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>positions_closed_count(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         venue: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Venue&gt;,
         instrument_id: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>InstrumentId&gt;,
         strategy_id: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>StrategyId&gt;,
         side: <span class="prelude-ty">Option</span>&lt;PositionSide&gt;,
-    ) -&gt; u64 {
+    ) -&gt; usize {
         <span class="self">self</span>.positions_closed(venue, instrument_id, strategy_id, side)
-            .len() <span class="kw">as </span>u64
+            .len()
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns the count of all positions.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>positions_total_count(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         venue: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Venue&gt;,
         instrument_id: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>InstrumentId&gt;,
         strategy_id: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>StrategyId&gt;,
         side: <span class="prelude-ty">Option</span>&lt;PositionSide&gt;,
-    ) -&gt; u64 {
+    ) -&gt; usize {
         <span class="self">self</span>.positions(venue, instrument_id, strategy_id, side)
-            .len() <span class="kw">as </span>u64
+            .len()
     }
 
     <span class="comment">// -- STRATEGY QUERIES ------------------------------------------------------------------------
 
+    </span><span class="doccomment">/// Gets a reference to the strategy ID for the given `client_order_id` (if found).
     </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>strategy_id_for_order(<span class="kw-2">&amp;</span><span class="self">self</span>, client_order_id: <span class="kw-2">&amp;</span>ClientOrderId) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>StrategyId&gt; {
         <span class="self">self</span>.index.order_strategy.get(client_order_id)
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Gets a reference to the strategy ID for the given `position_id` (if found).
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>strategy_id_for_position(<span class="kw-2">&amp;</span><span class="self">self</span>, position_id: <span class="kw-2">&amp;</span>PositionId) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>StrategyId&gt; {
         <span class="self">self</span>.index.position_strategy.get(position_id)
     }
 
     <span class="comment">// -- GENERAL ---------------------------------------------------------------------------------
 
+    </span><span class="doccomment">/// Gets a reference to the general object value for the given `key` (if found).
     </span><span class="kw">pub fn </span>get(<span class="kw-2">&amp;</span><span class="self">self</span>, key: <span class="kw-2">&amp;</span>str) -&gt; anyhow::Result&lt;<span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>[u8]&gt;&gt; {
         check_valid_string(key, <span class="macro">stringify!</span>(key))<span class="question-mark">?</span>;
 
@@ -5046,6 +5204,7 @@
 
     <span class="comment">// -- DATA QUERIES ----------------------------------------------------------------------------
 
+    </span><span class="doccomment">/// Returns the price for the given `instrument_id` and `price_type` (if found).
     </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>price(<span class="kw-2">&amp;</span><span class="self">self</span>, instrument_id: <span class="kw-2">&amp;</span>InstrumentId, price_type: PriceType) -&gt; <span class="prelude-ty">Option</span>&lt;Price&gt; {
         <span class="kw">match </span>price_type {
@@ -5073,105 +5232,122 @@
         }
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Gets all quote ticks for the given `instrument_id`.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>quote_ticks(<span class="kw-2">&amp;</span><span class="self">self</span>, instrument_id: <span class="kw-2">&amp;</span>InstrumentId) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;QuoteTick&gt;&gt; {
         <span class="self">self</span>.quotes
             .get(instrument_id)
             .map(|quotes| quotes.iter().copied().collect())
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Gets all trade ticks for the given `instrument_id`.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>trade_ticks(<span class="kw-2">&amp;</span><span class="self">self</span>, instrument_id: <span class="kw-2">&amp;</span>InstrumentId) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;TradeTick&gt;&gt; {
         <span class="self">self</span>.trades
             .get(instrument_id)
             .map(|trades| trades.iter().copied().collect())
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Gets all bars for the given `bar_type`.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>bars(<span class="kw-2">&amp;</span><span class="self">self</span>, bar_type: <span class="kw-2">&amp;</span>BarType) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;Bar&gt;&gt; {
         <span class="self">self</span>.bars
             .get(bar_type)
             .map(|bars| bars.iter().copied().collect())
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Gets a reference to the order book for the given `instrument_id`.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>order_book(<span class="kw-2">&amp;</span><span class="self">self</span>, instrument_id: <span class="kw-2">&amp;</span>InstrumentId) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>OrderBook&gt; {
         <span class="self">self</span>.books.get(instrument_id)
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Gets a reference to the latest quote tick for the given `instrument_id`.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>quote_tick(<span class="kw-2">&amp;</span><span class="self">self</span>, instrument_id: <span class="kw-2">&amp;</span>InstrumentId) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>QuoteTick&gt; {
         <span class="self">self</span>.quotes
             .get(instrument_id)
             .and_then(|quotes| quotes.front())
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Gets a refernece to the latest trade tick for the given `instrument_id`.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>trade_tick(<span class="kw-2">&amp;</span><span class="self">self</span>, instrument_id: <span class="kw-2">&amp;</span>InstrumentId) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>TradeTick&gt; {
         <span class="self">self</span>.trades
             .get(instrument_id)
             .and_then(|trades| trades.front())
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Gets a reference to the latest bar for the given `bar_type`.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>bar(<span class="kw-2">&amp;</span><span class="self">self</span>, bar_type: <span class="kw-2">&amp;</span>BarType) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Bar&gt; {
         <span class="self">self</span>.bars.get(bar_type).and_then(|bars| bars.front())
     }
 
-    <span class="attr">#[must_use]
-    </span><span class="kw">pub fn </span>book_update_count(<span class="kw-2">&amp;</span><span class="self">self</span>, instrument_id: <span class="kw-2">&amp;</span>InstrumentId) -&gt; u64 {
-        <span class="self">self</span>.books.get(instrument_id).map_or(<span class="number">0</span>, |book| book.count)
+    <span class="doccomment">/// Gets the order book update count for the given `instrument_id`.
+    </span><span class="attr">#[must_use]
+    </span><span class="kw">pub fn </span>book_update_count(<span class="kw-2">&amp;</span><span class="self">self</span>, instrument_id: <span class="kw-2">&amp;</span>InstrumentId) -&gt; usize {
+        <span class="self">self</span>.books.get(instrument_id).map_or(<span class="number">0</span>, |book| book.count) <span class="kw">as </span>usize
     }
 
-    <span class="attr">#[must_use]
-    </span><span class="kw">pub fn </span>quote_tick_count(<span class="kw-2">&amp;</span><span class="self">self</span>, instrument_id: <span class="kw-2">&amp;</span>InstrumentId) -&gt; u64 {
+    <span class="doccomment">/// Gets the quote tick count for the given `instrument_id`.
+    </span><span class="attr">#[must_use]
+    </span><span class="kw">pub fn </span>quote_tick_count(<span class="kw-2">&amp;</span><span class="self">self</span>, instrument_id: <span class="kw-2">&amp;</span>InstrumentId) -&gt; usize {
         <span class="self">self</span>.quotes
             .get(instrument_id)
-            .map_or(<span class="number">0</span>, std::collections::VecDeque::len) <span class="kw">as </span>u64
+            .map_or(<span class="number">0</span>, std::collections::VecDeque::len)
     }
 
-    <span class="attr">#[must_use]
-    </span><span class="kw">pub fn </span>trade_tick_count(<span class="kw-2">&amp;</span><span class="self">self</span>, instrument_id: <span class="kw-2">&amp;</span>InstrumentId) -&gt; u64 {
+    <span class="doccomment">/// Gets the trade tick count for the given `instrument_id`.
+    </span><span class="attr">#[must_use]
+    </span><span class="kw">pub fn </span>trade_tick_count(<span class="kw-2">&amp;</span><span class="self">self</span>, instrument_id: <span class="kw-2">&amp;</span>InstrumentId) -&gt; usize {
         <span class="self">self</span>.trades
             .get(instrument_id)
-            .map_or(<span class="number">0</span>, std::collections::VecDeque::len) <span class="kw">as </span>u64
+            .map_or(<span class="number">0</span>, std::collections::VecDeque::len)
     }
 
-    <span class="attr">#[must_use]
-    </span><span class="kw">pub fn </span>bar_count(<span class="kw-2">&amp;</span><span class="self">self</span>, bar_type: <span class="kw-2">&amp;</span>BarType) -&gt; u64 {
+    <span class="doccomment">/// Gets the bar count for the given `instrument_id`.
+    </span><span class="attr">#[must_use]
+    </span><span class="kw">pub fn </span>bar_count(<span class="kw-2">&amp;</span><span class="self">self</span>, bar_type: <span class="kw-2">&amp;</span>BarType) -&gt; usize {
         <span class="self">self</span>.bars
             .get(bar_type)
-            .map_or(<span class="number">0</span>, std::collections::VecDeque::len) <span class="kw">as </span>u64
+            .map_or(<span class="number">0</span>, std::collections::VecDeque::len)
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns whether the cache contains an order book for the given `instrument_id`.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>has_order_book(<span class="kw-2">&amp;</span><span class="self">self</span>, instrument_id: <span class="kw-2">&amp;</span>InstrumentId) -&gt; bool {
         <span class="self">self</span>.books.contains_key(instrument_id)
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns whether the cache contains quote ticks for the given `instrument_id`.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>has_quote_ticks(<span class="kw-2">&amp;</span><span class="self">self</span>, instrument_id: <span class="kw-2">&amp;</span>InstrumentId) -&gt; bool {
         <span class="self">self</span>.quote_tick_count(instrument_id) &gt; <span class="number">0
     </span>}
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns whether the cache contains trade ticks for the given `instrument_id`.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>has_trade_ticks(<span class="kw-2">&amp;</span><span class="self">self</span>, instrument_id: <span class="kw-2">&amp;</span>InstrumentId) -&gt; bool {
         <span class="self">self</span>.trade_tick_count(instrument_id) &gt; <span class="number">0
     </span>}
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns whether the cache contains bars for the given `bar_type`.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>has_bars(<span class="kw-2">&amp;</span><span class="self">self</span>, bar_type: <span class="kw-2">&amp;</span>BarType) -&gt; bool {
         <span class="self">self</span>.bar_count(bar_type) &gt; <span class="number">0
     </span>}
 
     <span class="comment">// -- INSTRUMENT QUERIES ----------------------------------------------------------------------
 
+    </span><span class="doccomment">/// Returns a reference to the instrument for the given `instrument_id` (if found).
     </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>instrument(<span class="kw-2">&amp;</span><span class="self">self</span>, instrument_id: <span class="kw-2">&amp;</span>InstrumentId) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>InstrumentAny&gt; {
         <span class="self">self</span>.instruments.get(instrument_id)
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns references to all instrument IDs for the given `venue`.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>instrument_ids(<span class="kw-2">&amp;</span><span class="self">self</span>, venue: <span class="kw-2">&amp;</span>Venue) -&gt; Vec&lt;<span class="kw-2">&amp;</span>InstrumentId&gt; {
         <span class="self">self</span>.instruments
             .keys()
@@ -5179,7 +5355,8 @@
             .collect()
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns references to all instruments for the given `venue`.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>instruments(<span class="kw-2">&amp;</span><span class="self">self</span>, venue: <span class="kw-2">&amp;</span>Venue) -&gt; Vec&lt;<span class="kw-2">&amp;</span>InstrumentAny&gt; {
         <span class="self">self</span>.instruments
             .values()
@@ -5187,7 +5364,8 @@
             .collect()
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns references to all bar types contained in the cache.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>bar_types(
         <span class="kw-2">&amp;</span><span class="self">self</span>,
         instrument_id: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>InstrumentId&gt;,
@@ -5213,23 +5391,27 @@
 
     <span class="comment">// -- SYNTHETIC QUERIES -----------------------------------------------------------------------
 
+    </span><span class="doccomment">/// Returns a reference to the synthetic instrument for the given `instrument_id` (if found).
     </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>synthetic(<span class="kw-2">&amp;</span><span class="self">self</span>, instrument_id: <span class="kw-2">&amp;</span>InstrumentId) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>SyntheticInstrument&gt; {
         <span class="self">self</span>.synthetics.get(instrument_id)
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns references to instrument IDs for all synthetic instruments contained in the cache.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>synthetic_ids(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;<span class="kw-2">&amp;</span>InstrumentId&gt; {
         <span class="self">self</span>.synthetics.keys().collect()
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns references to all synthetic instruments contained in the cache.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>synthetics(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;<span class="kw-2">&amp;</span>SyntheticInstrument&gt; {
         <span class="self">self</span>.synthetics.values().collect()
     }
 
     <span class="comment">// -- ACCOUNT QUERIES -----------------------------------------------------------------------
 
+    </span><span class="doccomment">/// Returns a reference to the account for the given `account_id` (if found).
     </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>account(<span class="kw-2">&amp;</span><span class="self">self</span>, account_id: <span class="kw-2">&amp;</span>AccountId) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="kw">dyn </span>Account&gt; {
         <span class="self">self</span>.accounts
@@ -5237,7 +5419,8 @@
             .map(std::convert::AsRef::as_ref)
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns a reference to the account for the given `venue` (if found).
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>account_for_venue(<span class="kw-2">&amp;</span><span class="self">self</span>, venue: <span class="kw-2">&amp;</span>Venue) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span><span class="kw">dyn </span>Account&gt; {
         <span class="self">self</span>.index
             .venue_account
@@ -5246,12 +5429,14 @@
             .map(std::convert::AsRef::as_ref)
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns a reference to the account ID for the given `venue` (if found).
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>account_id(<span class="kw-2">&amp;</span><span class="self">self</span>, venue: <span class="kw-2">&amp;</span>Venue) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>AccountId&gt; {
         <span class="self">self</span>.index.venue_account.get(venue)
     }
 
-    <span class="attr">#[must_use]
+    <span class="doccomment">/// Returns references to all accounts for the given `account_id`.
+    </span><span class="attr">#[must_use]
     </span><span class="kw">pub fn </span>accounts(<span class="kw-2">&amp;</span><span class="self">self</span>, account_id: <span class="kw-2">&amp;</span>AccountId) -&gt; Vec&lt;<span class="kw-2">&amp;</span><span class="kw">dyn </span>Account&gt; {
         <span class="self">self</span>.accounts
             .values()
@@ -5268,7 +5453,7 @@
     <span class="kw">use </span>nautilus_core::{nanos::UnixNanos, uuid::UUID4};
     <span class="kw">use </span>nautilus_model::{
         data::{bar::Bar, quote::QuoteTick, trade::TradeTick},
-        enums::OrderSide,
+        enums::{OrderSide, OrderStatus},
         events::order::{accepted::OrderAccepted, event::OrderEventAny, submitted::OrderSubmitted},
         identifiers::{
             account_id::AccountId, client_order_id::ClientOrderId, position_id::PositionId,
@@ -5280,8 +5465,8 @@
         },
         orders::{any::OrderAny, stubs::TestOrderStubs},
         polymorphism::{
-            ApplyOrderEventAny, GetAccountId, GetClientOrderId, GetInstrumentId, GetStrategyId,
-            GetTraderId, GetVenueOrderId, IsOpen,
+            ApplyOrderEventAny, GetAccountId, GetClientOrderId, GetInstrumentId, GetOrderStatus,
+            GetStrategyId, GetTraderId, GetVenueOrderId, IsOpen,
         },
         types::{price::Price, quantity::Quantity},
     };
@@ -5310,21 +5495,21 @@
     }
 
     <span class="attr">#[rstest]
-    </span><span class="kw">fn </span>test_dispose_when_empty(cache: Cache) {
+    </span><span class="kw">fn </span>test_dispose_when_empty(<span class="kw-2">mut </span>cache: Cache) {
         <span class="kw">let </span>result = cache.dispose();
         <span class="macro">assert!</span>(result.is_ok());
     }
 
     <span class="attr">#[rstest]
-    </span><span class="kw">fn </span>test_flush_db_when_empty(cache: Cache) {
+    </span><span class="kw">fn </span>test_flush_db_when_empty(<span class="kw-2">mut </span>cache: Cache) {
         <span class="kw">let </span>result = cache.flush_db();
         <span class="macro">assert!</span>(result.is_ok());
     }
 
     <span class="attr">#[rstest]
     </span><span class="kw">fn </span>test_check_residuals_when_empty(cache: Cache) {
-        <span class="kw">let </span>result = cache.flush_db();
-        <span class="macro">assert!</span>(result.is_ok());
+        <span class="kw">let </span>result = cache.check_residuals();
+        <span class="macro">assert!</span>(!result);
     }
 
     <span class="attr">#[rstest]
@@ -5442,22 +5627,23 @@
 
         <span class="kw">let </span>result = cache.order(<span class="kw-2">&amp;</span>order.client_order_id()).unwrap();
 
+        <span class="macro">assert_eq!</span>(order.status(), OrderStatus::Submitted);
         <span class="macro">assert_eq!</span>(result, <span class="kw-2">&amp;</span>order);
         <span class="macro">assert_eq!</span>(cache.orders(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>), <span class="macro">vec!</span>[<span class="kw-2">&amp;</span>order]);
         <span class="macro">assert!</span>(cache.orders_open(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>).is_empty());
         <span class="macro">assert!</span>(cache.orders_closed(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>).is_empty());
         <span class="macro">assert!</span>(cache.orders_emulated(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>).is_empty());
-        <span class="macro">assert!</span>(cache.orders_inflight(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>).is_empty());
+        <span class="macro">assert!</span>(!cache.orders_inflight(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>).is_empty());
         <span class="macro">assert!</span>(cache.order_exists(<span class="kw-2">&amp;</span>order.client_order_id()));
         <span class="macro">assert!</span>(!cache.is_order_open(<span class="kw-2">&amp;</span>order.client_order_id()));
         <span class="macro">assert!</span>(!cache.is_order_closed(<span class="kw-2">&amp;</span>order.client_order_id()));
         <span class="macro">assert!</span>(!cache.is_order_emulated(<span class="kw-2">&amp;</span>order.client_order_id()));
-        <span class="macro">assert!</span>(!cache.is_order_inflight(<span class="kw-2">&amp;</span>order.client_order_id()));
+        <span class="macro">assert!</span>(cache.is_order_inflight(<span class="kw-2">&amp;</span>order.client_order_id()));
         <span class="macro">assert!</span>(!cache.is_order_pending_cancel_local(<span class="kw-2">&amp;</span>order.client_order_id()));
         <span class="macro">assert_eq!</span>(cache.orders_open_count(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>), <span class="number">0</span>);
         <span class="macro">assert_eq!</span>(cache.orders_closed_count(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>), <span class="number">0</span>);
         <span class="macro">assert_eq!</span>(cache.orders_emulated_count(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>), <span class="number">0</span>);
-        <span class="macro">assert_eq!</span>(cache.orders_inflight_count(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>), <span class="number">0</span>);
+        <span class="macro">assert_eq!</span>(cache.orders_inflight_count(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>), <span class="number">1</span>);
         <span class="macro">assert_eq!</span>(cache.orders_total_count(<span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>), <span class="number">1</span>);
         <span class="macro">assert_eq!</span>(cache.venue_order_id(<span class="kw-2">&amp;</span>order.client_order_id()), <span class="prelude-val">None</span>);
     }

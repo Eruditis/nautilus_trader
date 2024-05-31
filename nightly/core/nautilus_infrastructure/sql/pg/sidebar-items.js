@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["connect_pg","delete_nautilus_postgres_tables","drop_postgres","get_postgres_connect_options","init_postgres"],"struct":["PostgresConnectOptions"]};
