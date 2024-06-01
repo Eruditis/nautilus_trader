@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["OrderCanceledBuilderError"],"struct":["OrderCanceled","OrderCanceledBuilder"]};

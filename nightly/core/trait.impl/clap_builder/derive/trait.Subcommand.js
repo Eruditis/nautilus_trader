@@ -1,0 +1,3 @@
+(function() {var implementors = {
+"nautilus_cli":[["impl Subcommand for <a class=\"enum\" href=\"nautilus_cli/opt/enum.Commands.html\" title=\"enum nautilus_cli::opt::Commands\">Commands</a>"],["impl Subcommand for <a class=\"enum\" href=\"nautilus_cli/opt/enum.DatabaseCommand.html\" title=\"enum nautilus_cli::opt::DatabaseCommand\">DatabaseCommand</a>"]]
+};if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

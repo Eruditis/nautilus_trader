@@ -1,0 +1,1 @@
+searchState.loadedDescShard("nautilus_pyo3", 0, "NautilusTrader is an open-source, high-performance, …")
